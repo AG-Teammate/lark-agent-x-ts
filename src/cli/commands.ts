@@ -106,7 +106,7 @@ const auth: Command = {
       name: 'region',
       kind: 'string',
       choices: Object.keys(REGIONS),
-      help: 'qr/import 登录的区域: feishu=飞书(国内版) lark=Lark(国际版);默认沿用已有凭证,无凭证时取 LARKX_REGION',
+      help: 'qr/import 登录的区域: feishu=飞书(国内版) lark=Lark(国际版) lark-jp=Lark 日本数据中心(jp.larksuite.com);默认沿用已有凭证,无凭证时取 LARKX_REGION',
     },
   ],
   async run(a) {
@@ -1303,7 +1303,7 @@ async function interactiveLogin(): Promise<LarkAuth> {
   }
   if (!process.stdin.isTTY) throw new AuthExpired(msg);
   out(
-    `凭证缺失或已失效(区域: ${la.region.name},切换区域用 lark auth qr --region <feishu|lark>): ${msg}`,
+    `凭证缺失或已失效(区域: ${la.region.name},切换区域用 lark auth qr --region <feishu|lark|lark-jp>): ${msg}`,
   );
   for (;;) {
     const choice = await askLoginChoice();
