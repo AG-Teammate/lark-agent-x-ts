@@ -58,6 +58,8 @@ const PULL_LOAD_MORE = 2;
 const PULL_FEED_INBOX = 2;
 const BUSINESS_LARK = 1;
 const CARD_CHAT = 1;
+// entities.Chat.Type.P2P
+const CHAT_P2P = 1;
 
 export interface SendOptions {
   /** Reply into a thread (root message id). */
@@ -105,6 +107,21 @@ export interface RecentChat {
   updatedAt: number;
   /** Chat info (entities.Chat, same as getChatInfo); null if the server didn't include it. */
   chat: Dict | null;
+}
+
+/** A chat from the server-side chat list (the inbox feed), as returned by listChats. */
+export interface ListedChat {
+  chatId: string;
+  /** Group name; for a direct chat, the other member's display name (your own name for the self-chat). */
+  name: string;
+  /** 1 = direct chat, 2 = group chat, 3 = legacy thread group (new-style thread groups are also 2; check threadChat). */
+  chatType: number;
+  threadChat: boolean;
+  /** Time of the chat's most recent change (ms). */
+  updatedAt: number;
+  /** Unread message count, as on the client badge. */
+  unread: number;
+  memberCount: number;
 }
 
 /** A chat with unread messages: unread is the chat's unread count (thread groups count new threads separately). */
@@ -1323,14 +1340,7 @@ export class LarkClient {
     const out: RecentChat[] = [];
     let cursor: bigint | undefined;
     for (let page = 0; page < maxPages; page++) {
-      const resp = await this.api('feed.PullFeedCardsRequest', {
-        type: FEED_INBOX,
-        pullFeedType: PULL_FEED_INBOX,
-        businessType: BUSINESS_LARK,
-        pullType: cursor === undefined ? PULL_REFRESH : PULL_LOAD_MORE,
-        count: 50,
-        ...(cursor === undefined ? {} : { cursor }),
-      });
+      const resp = await this.pullInboxPage(cursor);
       const cards = (resp.cards ?? []) as Dict[];
       const chats = (resp.chats ?? {}) as Record<string, Dict>;
       for (const card of cards) {
@@ -1346,6 +1356,71 @@ export class LarkClient {
       cursor = next;
     }
     return out;
+  }
+
+  /** One page (50 cards) of the inbox feed, newest first; cursor is the previous page's nextCursor. */
+  private pullInboxPage(cursor?: bigint): Promise<Dict> {
+    return this.api('feed.PullFeedCardsRequest', {
+      type: FEED_INBOX,
+      pullFeedType: PULL_FEED_INBOX,
+      businessType: BUSINESS_LARK,
+      pullType: cursor === undefined ? PULL_REFRESH : PULL_LOAD_MORE,
+      count: 50,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+  }
+
+  /**
+   * The server-side chat list: direct and group chats in the inbox, most recent change first, up to limit.
+   * Threads, docs, mail and other feed cards are skipped, as are chats marked Done (they leave the inbox).
+   * Direct chats have no name on the server, so peerNames (default on) looks up the other member, a few chats at a time.
+   */
+  async listChats(limit = 100, o: { peerNames?: boolean } = {}): Promise<ListedChat[]> {
+    const out: ListedChat[] = [];
+    let cursor: bigint | undefined;
+    // The page cap only guards against a cursor that never ends; a real inbox ends well before it
+    for (let page = 0; page < 200 && out.length < limit; page++) {
+      const resp = await this.pullInboxPage(cursor);
+      const cards = (resp.cards ?? []) as Dict[];
+      const chats = (resp.chats ?? {}) as Record<string, Dict>;
+      for (const card of cards) {
+        if (card.type !== CARD_CHAT || out.length >= limit) continue;
+        const chatId = String(card.id);
+        const chat = chats[chatId] ?? (await this.getChatInfo(chatId));
+        if (!chat) continue;
+        out.push({
+          chatId,
+          name: String(chat.name ?? ''),
+          chatType: enumToInt(chat.type ?? 0),
+          threadChat: isThreadChat(chat),
+          updatedAt: Number(card.updateTimeMs ?? 0) || Number(card.updateTime ?? 0) * 1000,
+          unread: Math.max(0, int(chat.newMessageCount, 0)),
+          memberCount: int(chat.memberCount, 0),
+        });
+      }
+      const next = resp.nextCursor as bigint | undefined;
+      if (!cards.length || !next) break;
+      cursor = next;
+    }
+    if (o.peerNames ?? true) await this.fillPeerNames(out);
+    return out;
+  }
+
+  /** Name each unnamed direct chat after its other member; lookups run a few at a time and a failed one leaves the name empty. */
+  private async fillPeerNames(chats: ListedChat[]): Promise<void> {
+    const todo = chats.filter((c) => c.chatType === CHAT_P2P && !c.name);
+    const self = this.auth.userId;
+    const worker = async () => {
+      for (let c = todo.shift(); c; c = todo.shift()) {
+        try {
+          const members = await this.chatMembers(c.chatId, 10);
+          c.name = (members.find((m) => m.id !== self) ?? members[0])?.name ?? '';
+        } catch (err) {
+          logger.debug(`查询私聊对方失败 ${c.chatId}: ${(err as Error).message}`);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: 8 }, worker));
   }
 
   /** Fetch messages by id (may span chats), returned in the given order; ids that don't exist or aren't visible are skipped. */
@@ -1695,6 +1770,7 @@ const METHOD_PERMISSIONS: {
   myReadStates: 'read-status',
   markRead: 'read',
   readMessages: 'read',
+  listChats: 'chats.remote',
   recentChats: 'unread',
   unreadChats: 'unread',
   unreadMessages: 'unread',

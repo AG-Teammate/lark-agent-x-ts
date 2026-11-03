@@ -30,7 +30,7 @@ export type Group = keyof typeof GROUPS;
 export const PERMISSIONS = {
   'auth.status': 'local',
   config: 'local',
-  chats: 'local',
+  'chats.local': 'local',
   sessions: 'local',
   messages: 'local',
   'permissions.show': 'local',
@@ -55,6 +55,7 @@ export const PERMISSIONS = {
   download: 'query',
   'scheduled.list': 'query',
   'shortcut.list': 'query',
+  'chats.remote': 'query',
 
   send: 'outbound',
   'send-image': 'outbound',

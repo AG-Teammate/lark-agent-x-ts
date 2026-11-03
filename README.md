@@ -48,7 +48,7 @@ Put `dist/lark` on your PATH. `lark --version` prints the version and build comm
 | `lark thread <root_id>` | Fetch a thread: the root message plus recent replies (`--count`, `--save`, `--json`) |
 | `lark download <msg_id> -o <path>` | Download the image/file in a message (fetched from the server if the message isn't stored locally) |
 | `lark api <type_name> '<json>'` | Call any gateway endpoint (type names are in `assets/cmd_map.json`) |
-| `lark chats` / `lark sessions` | Chat list / agent session table |
+| `lark chats` / `lark sessions` | Chat list from the local store (`--remote` pulls the server-side list: direct and group chats in your inbox, most recent first, `--limit`, `--json`) / agent session table |
 | `lark search <keyword>` | Search users/groups |
 | `lark search-messages <keyword>` | Search messages across chats (`--chat`, `--from`, `--since`/`--until`: `3d`, `2026-10-01` or a timestamp, `--limit`, `--json`) |
 | `lark unread` | Chats with unread messages; `--chat <id>` shows a chat's unread messages, `--at` shows only unread messages that @mention me in each chat (`--since`, `--names`, `--json`) |
@@ -81,8 +81,8 @@ Each command can be allowed or denied individually or by group, to limit what th
 
 | Group | Contains |
 |---|---|
-| `local` | Read-only local data: `auth status`, `config`, `chats`, `sessions`, `messages`, `permissions` (viewing) |
-| `query` | Read-only Feishu data: `auth check`, `history`, `get`, `thread`, `search`, `search-messages`, `unread`, `members`, `users`, `reactions`, `read-status`, `pins`, `flags`, `tags`, `translate`, `message-link`, `self-chat`, `download`, plus listing with `scheduled` and `shortcut` |
+| `local` | Read-only local data: `auth status`, `config`, `chats` (local list), `sessions`, `messages`, `permissions` (viewing) |
+| `query` | Read-only Feishu data: `auth check`, `chats --remote`, `history`, `get`, `thread`, `search`, `search-messages`, `unread`, `members`, `users`, `reactions`, `read-status`, `pins`, `flags`, `tags`, `translate`, `message-link`, `self-chat`, `download`, plus listing with `scheduled` and `shortcut` |
 | `outbound` | Sends new messages: `send`, `send-image`, `send-file`, `schedule`, `forward`, plus cancelling and rescheduling with `scheduled` |
 | `modify` | Changes existing messages or state others can see: `recall`, `edit`, `react`, `pin`, `read` |
 | `organize` | Personal organization that only affects you: `flag`, plus pinning and unpinning with `shortcut` |
@@ -134,6 +134,7 @@ await client.addReaction('<msg_id>', 'DONE'); // also editMessage, recallMessage
 const names = await client.userNames(['<user_id>']); // id → name (batched, cached); chatMembers(chatId) lists group members
 const today = await client.historyRange('<chat_id>', { since: Date.now() - 3_600_000 }); // fetch chat history in a time range
 const mentions = await client.unreadMentions(); // unread @mentions of me; unreadChats() / unreadMessages(chatId)
+const inbox = await client.listChats(200); // server-side chat list: direct and group chats, newest first, direct chats named after the other member
 const hits = await client.searchMessages('monthly report', { since: Date.now() - 7 * 86_400_000 }); // search messages across chats
 const [quoted] = await client.getMessages(['<msg_id>']); // fetch messages by id; threadMessages(rootId) fetches a whole thread
 const missed = await client.missedMessages(Date.now() - 10 * 60_000); // backfill after reconnecting: messages that arrived after a given time (including thread replies)

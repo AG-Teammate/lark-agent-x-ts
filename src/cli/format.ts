@@ -21,6 +21,13 @@ export function shortTime(ts: number | null | undefined): string {
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** Timestamp in ms → local time `YYYY-MM-DD HH:MM:SS`, the same shape as DateTime strings from the DB; 0 gives `None`. */
+export function localDatetime(ms: number): string {
+  if (!ms) return 'None';
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 /** DateTime strings from the DB are printed like Python `str(datetime)`: no fractional part when microseconds are 0. */
 export const pyDatetime = (s: string | null | undefined): string =>
   s ? String(s).replace(/\.0{6}$/, '') : 'None';

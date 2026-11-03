@@ -86,6 +86,58 @@ describe('网关客户端', () => {
     ]);
   });
 
+  test('listChats: pages the inbox, keeps only chat cards up to limit, names direct chats after the other member', async () => {
+    const c = newClient();
+    const card = (id: string, type: number, ms: number) => ({ id, type, updateTimeMs: BigInt(ms) });
+    const pages: Dict[] = [
+      {
+        cards: [card('g1', 1, 50), card('t1', 4, 40), card('p1', 1, 30)],
+        chats: {
+          g1: {
+            id: 'g1',
+            type: 2,
+            chatMode: 1,
+            name: '项目协作群',
+            newMessageCount: 2,
+            memberCount: 5,
+          },
+          p1: { id: 'p1', type: 1, memberCount: 2 },
+        },
+        nextCursor: 30n,
+      },
+      { cards: [card('self', 1, 20), card('x1', 1, 10)], nextCursor: 10n },
+      { cards: [card('late', 1, 5)], nextCursor: 0n },
+    ];
+    const reqs: Dict[] = [];
+    c.api = async (type, data) => {
+      expect(type).toBe('feed.PullFeedCardsRequest');
+      reqs.push(data as Dict);
+      return pages[reqs.length - 1] ?? {};
+    };
+    // Cards whose chat info is missing from the page are fetched one by one; unknown chats are skipped
+    c.getChatInfo = async (id) => (id === 'self' ? { id, type: 1, memberCount: 1 } : null);
+    c.chatMembers = async (id) =>
+      id === 'p1'
+        ? [
+            { id: 'me', name: '我自己', type: 'user' },
+            { id: 'u1', name: '同事甲', type: 'user' },
+          ]
+        : [{ id: 'me', name: '我自己', type: 'user' }];
+    const got = await c.listChats(3);
+    expect(got.map((x) => [x.chatId, x.name, x.chatType, x.unread, x.updatedAt])).toEqual([
+      ['g1', '项目协作群', 2, 2, 50],
+      ['p1', '同事甲', 1, 0, 30],
+      ['self', '我自己', 1, 0, 20],
+    ]);
+    // The limit is reached on the second page, so the third is never requested
+    expect(reqs.map((r) => [r.pullType, r.cursor])).toEqual([
+      [1, undefined],
+      [2, 30n],
+    ]);
+    reqs.length = 0;
+    expect((await c.listChats(1, { peerNames: false }))[0]?.chatId).toBe('g1');
+  });
+
   test('发送失败（网络或响应里没有消息 id）返回 null，不抛错', async () => {
     const c = newClient();
     c.sendRetryDelayMs = 0;

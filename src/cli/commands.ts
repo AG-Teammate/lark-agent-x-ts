@@ -30,7 +30,7 @@ import { getRegion, REGIONS, type Region, urls } from '../region.js';
 import { Storage } from '../storage/index.js';
 import { head, preview } from '../text.js';
 import type { CommandSpec, Option, Parsed } from './args.js';
-import { errorText, printJson, pyDatetime, shortTime } from './format.js';
+import { errorText, localDatetime, printJson, pyDatetime, shortTime } from './format.js';
 import { keepListening } from './listen-loop.js';
 import { editInTerminal, PermissionEditor } from './permissions-editor.js';
 import { qrAscii, saveQrPng } from './qr.js';
@@ -835,10 +835,24 @@ const CHAT_TYPE_LABELS: Record<number, string> = { 1: '私聊', 2: '群聊', 3: 
 
 const chats: Command = {
   name: 'chats',
-  help: '列出本地会话',
-  access: 'chats',
-  options: [{ name: 'limit', kind: 'int', default: 50 }],
+  help: '列出本地会话;--remote 从服务端拉会话列表(收件箱里的私聊与群聊,按最近变动排序)',
+  access: (a) => (a.remote ? 'chats.remote' : 'chats.local'),
+  options: [
+    { name: 'limit', kind: 'int', default: 50 },
+    { name: 'remote', kind: 'flag', help: '从服务端拉会话列表,而不是读本地库' },
+    { name: 'json', kind: 'flag', help: '与 --remote 一起用,输出 JSON' },
+  ],
   async run(a) {
+    if (a.remote) {
+      const list = await (await client()).listChats(Number(a.limit));
+      if (a.json) printJson(list);
+      else
+        for (const c of list)
+          out(
+            `${c.chatId}\t${CHAT_TYPE_LABELS[c.threadChat ? 3 : c.chatType] ?? '?'}\t${c.name || '(未命名)'}\t更新于 ${localDatetime(c.updatedAt)}`,
+          );
+      return 0;
+    }
     const st = new Storage();
     for (const c of await st.listChats(Number(a.limit)))
       out(

@@ -89,6 +89,15 @@ describe('权限目录', () => {
     expect(decide({ allow: ['outbound'], deny: ['outbound'] }, 'send').allowed).toBe(false);
   });
 
+  test('chats: the local list is local-only, the remote list is a query; a rule on chats covers both', () => {
+    expect(permissionFor('chats', [])).toBe('chats.local');
+    expect(permissionFor('chats', ['--remote'])).toBe('chats.remote');
+    expect(decide({ allow: [], deny: ['query'] }, 'chats.local').allowed).toBe(true);
+    expect(decide({ allow: [], deny: ['query'] }, 'chats.remote').allowed).toBe(false);
+    expect(decide({ allow: [], deny: ['chats'] }, 'chats.local').rule).toBe('deny chats');
+    expect(decide({ allow: ['chats'], deny: ['query'] }, 'chats.remote').allowed).toBe(true);
+  });
+
   test('全局规则来自环境变量；账号有自己的规则时整体替代全局规则', () => {
     process.env.LARKX_DENY = 'outbound, manage';
     process.env.LARKX_ALLOW = '["send"]';
