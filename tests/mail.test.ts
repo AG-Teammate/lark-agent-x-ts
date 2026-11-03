@@ -265,6 +265,32 @@ describe('mail reads', () => {
     });
   });
 
+  test('threads(): summaries are fetched at most 30 ids per request (server limit)', async () => {
+    const c = newClient();
+    const ids = Array.from(
+      { length: 35 },
+      (_, i) => `70000000000000001${String(i).padStart(2, '0')}`,
+    );
+    const sizes: number[] = [];
+    fakeApi(c, {
+      'mails.GetMailThreadMetaRequest': () => ({
+        hasMore: false,
+        threads: ids.map((id, i) => ({
+          threadBizId: id,
+          sortTimestamp: String(10_000 - i),
+          messages: [{ messageBizId: id, labelIds: ['TRASH'] }],
+        })),
+      }),
+      'mails.GetMailMessageSummaryRequest': (d) => {
+        sizes.push((d.messageBizIds as string[]).length);
+        return { messageSummaries: [] };
+      },
+      'mails.GetThreadMetaByThreadIDsRequest': () => ({ metas: [] }),
+    });
+    expect((await c.mail.threads('TRASH', { limit: 35 })).length).toBe(35);
+    expect(sizes).toEqual([30, 5]);
+  });
+
   test('thread(): full messages oldest first', async () => {
     const c = newClient();
     fakeApi(c, {

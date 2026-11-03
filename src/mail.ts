@@ -248,6 +248,8 @@ export function adler32(data: Uint8Array): string {
 }
 
 const BLOCK_SIZE = 4 * 1024 * 1024;
+/** The server rejects summary requests above ~30 ids ("batchSize out of limit"); the web client sends 30. */
+const SUMMARY_BATCH = 30;
 const MAIL_MOUNT = 'email';
 const TIME_DESC = 2;
 const NEWER_THAN = 1;
@@ -346,9 +348,9 @@ export class LarkMail {
     const ids = threads.flatMap((t) => t.messageIds);
     if (!ids.length) return;
     const byId = new Map<string, Dict>();
-    for (let i = 0; i < ids.length; i += 50) {
+    for (let i = 0; i < ids.length; i += SUMMARY_BATCH) {
       const resp = await this.client.api('mails.GetMailMessageSummaryRequest', {
-        messageBizIds: ids.slice(i, i + 50),
+        messageBizIds: ids.slice(i, i + SUMMARY_BATCH),
       });
       for (const s of list(resp.messageSummaries)) byId.set(str(s.messageBizId), s);
     }
