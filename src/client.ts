@@ -3,6 +3,7 @@ import type { LarkAuth } from './auth.js';
 import { HttpError, NetworkError, request, USER_AGENT } from './http.js';
 import { accessKey, longRequestId, requestCid, requestId } from './ids.js';
 import { getLogger } from './log.js';
+import { LarkMail, MAIL_METHOD_PERMISSIONS } from './mail.js';
 import { uploadFile, uploadImage } from './media.js';
 import {
   authorize,
@@ -312,6 +313,8 @@ export interface ClientOptions {
 /** Web-protocol client: gateway requests (HTTP + protobuf) and the message long connection. */
 export class LarkClient {
   private readonly threadChats = new Map<string, boolean>();
+  private mailbox: LarkMail | undefined;
+  private permissionCheck: ((p: Permission) => void) | undefined;
   private readonly chatterNames = new Map<string, string>();
 
   private constructor(readonly auth: LarkAuth) {}
@@ -327,7 +330,8 @@ export class LarkClient {
     const source = o.permissions;
     if (source) {
       checkSource(auth, source);
-      guardMethods(client, METHOD_PERMISSIONS, (p) => authorize(auth, source, p));
+      client.permissionCheck = (p) => authorize(auth, source, p);
+      guardMethods(client, METHOD_PERMISSIONS, client.permissionCheck);
     }
     return client;
   }
@@ -492,6 +496,16 @@ export class LarkClient {
     } catch (err) {
       logger.error(`消息回调异常: ${(err as Error).message}`);
     }
+  }
+
+  /** Lark Mail for this account (same credentials and permission rules as the client). */
+  get mail(): LarkMail {
+    if (!this.mailbox) {
+      this.mailbox = new LarkMail(this);
+      if (this.permissionCheck)
+        guardMethods(this.mailbox, MAIL_METHOD_PERMISSIONS, this.permissionCheck);
+    }
+    return this.mailbox;
   }
 
   async gatewayPost(packet: Packet): Promise<Uint8Array> {

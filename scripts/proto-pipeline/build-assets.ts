@@ -62,6 +62,15 @@ const CORE_REQUESTS = [
   'thread.PullThreadsByPositionsRequest',
   'translate.TranslateWebXMLRequest',
   'usearch.UniversalSearchRequest',
+  // Lark Mail (src/mail.ts)
+  'mailchanges.MailAddChangeRequest',
+  'mails.GetMailMessageFullByMessageIDsRequest',
+  'mails.GetMailMessageSummaryRequest',
+  'mails.GetMailSettingsRequest',
+  'mails.GetMailThreadMetaRequest',
+  'mails.GetThreadMetaByThreadIDsRequest',
+  'mails.MailAdvancedSearchRequest',
+  'mails.MailInitSyncRequest',
 ];
 const CORE_TYPES = [
   'entities.RichTextElement.AnchorProperty',

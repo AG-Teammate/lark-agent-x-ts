@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { type CommandSpec, HelpRequested, parse, UsageError } from '../src/cli/args.js';
+import { type CommandSpec, HelpRequested, parse, UsageError, usage } from '../src/cli/args.js';
 
 const send: CommandSpec = {
   name: 'send',
@@ -72,6 +72,33 @@ describe('参数解析（对齐 argparse）', () => {
     expect(err(send, ['c1', 't', '--nope'])).toBe(
       'lark send: error: unrecognized arguments: --nope',
     );
+  });
+
+  test('nargs * accepts zero or more positionals and leaves room for required ones', () => {
+    const spec: CommandSpec = {
+      name: 'mail',
+      help: '',
+      positionals: [{ name: 'action' }, { name: 'ids', nargs: '*' }, { name: 'target' }],
+    };
+    expect(parse('lark', spec, ['read', 'inbox'])).toEqual({
+      action: 'read',
+      ids: [],
+      target: 'inbox',
+    });
+    expect(parse('lark', spec, ['read', 'a', 'b', 'inbox'])).toEqual({
+      action: 'read',
+      ids: ['a', 'b'],
+      target: 'inbox',
+    });
+    const tail: CommandSpec = {
+      name: 'mail',
+      help: '',
+      positionals: [{ name: 'action' }, { name: 'args', nargs: '*' }],
+    };
+    expect(parse('lark', tail, ['list'])).toEqual({ action: 'list', args: [] });
+    expect(parse('lark', tail, ['list', 'x', '-1'])).toEqual({ action: 'list', args: ['x', '-1'] });
+    expect(usage('lark', tail)).toBe('usage: lark mail [-h] action [args ...]');
+    expect(() => parse('lark', tail, [])).toThrow('the following arguments are required: action');
   });
 
   test('-h 打印帮助', () => {

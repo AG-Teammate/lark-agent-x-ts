@@ -13,7 +13,14 @@ export interface Region {
   webAppId: string;
   locale: string;
   /** For separately deployed data centers whose gateway / long-connection / file hosts don't follow the `domain` rules (e.g. Lark Japan), override here; otherwise derived from `domain`. */
-  hosts?: { api?: string; ws?: string; file?: string };
+  hosts?: {
+    api?: string;
+    ws?: string;
+    file?: string;
+    space?: string;
+    driveStream?: string;
+    internal?: string;
+  };
 }
 
 export const REGIONS: Record<Region['name'], Region> = {
@@ -42,6 +49,9 @@ export const REGIONS: Record<Region['name'], Region> = {
       api: 'internal-api-lark-api-jp.larksuite.com',
       ws: 'msg16-frontier-jp.larksuite.com',
       file: 'internal-api-lark-file-jp.larksuite.com',
+      space: 'internal-api-space-jp.larksuite.com',
+      driveStream: 'internal-api-drive-stream-jp.larksuite.com',
+      internal: 'internal-api-jp.larksuite.com',
     },
   },
 };
@@ -65,4 +75,9 @@ export const urls = {
   accountsOrigin: (r: Region) => `https://accounts.${r.domain}`,
   ws: (r: Region) => `wss://${r.hosts?.ws ?? `msg-frontier.${r.domain}`}/ws/v2`,
   fileHost: (r: Region) => `https://${r.hosts?.file ?? `internal-api-lark-file.${r.domain}`}`,
+  /** Drive file service used by Lark Mail attachments: upload prepare/finish, block upload, download. */
+  spaceHost: (r: Region) => `https://${r.hosts?.space ?? `internal-api-space.${r.domain}`}`,
+  driveStreamHost: (r: Region) =>
+    `https://${r.hosts?.driveStream ?? `internal-api-drive-stream.${r.domain}`}`,
+  internalHost: (r: Region) => `https://${r.hosts?.internal ?? `internal-api.${r.domain}`}`,
 };

@@ -2651,6 +2651,14 @@
 "cmd": 3404,
 "resp": "calendar.v1.GetAllTimeContainersResponse"
 },
+"mailchanges.MailAddChangeRequest": {
+"cmd": 3507,
+"resp": "mailchanges.MailAddChangeResponse"
+},
+"mails.MailApplyRuleRequest": {
+"cmd": 3511,
+"resp": "mails.MailApplyRuleResponse"
+},
 "mails.MailSendPreviewRequest": {
 "cmd": 3516,
 "resp": "mails.MailSendPreviewResponse"
@@ -2662,6 +2670,14 @@
 "mails.CopyMailCardFileRequest": {
 "cmd": 3518,
 "resp": "mails.CopyMailCardFileResponse"
+},
+"mails.MailInitSyncRequest": {
+"cmd": 3600,
+"resp": "mails.MailInitSyncResponse"
+},
+"mails.GetMailThreadMetaRequest": {
+"cmd": 3601,
+"resp": "mails.GetMailThreadMetaResponse"
 },
 "mails.GetStrangerThreadListMetaRequest": {
 "cmd": 3609,
@@ -2687,9 +2703,41 @@
 "cmd": 3614,
 "resp": "mails.MailReportUserSearchActionResponse"
 },
+"mails.MailAtContactRequest": {
+"cmd": 3650,
+"resp": "mails.MailAtContactResponse"
+},
+"mails.RulePreviewRequest": {
+"cmd": 3656,
+"resp": "mails.MessagesSummary"
+},
+"mails.MailContactSearchRequest": {
+"cmd": 3657,
+"resp": "mails.MailContactSearchResult"
+},
 "mails.MailAdvancedSearchRequest": {
 "cmd": 3658,
 "resp": "mails.MailAdvancedSearchResponse"
+},
+"mails.MailRequestParams": {
+"cmd": 3660,
+"resp": "mails.GetUnreadMailThreadMetaResponse"
+},
+"mails.GetThreadMetaByThreadIDsRequest": {
+"cmd": 3662,
+"resp": "mails.GetThreadMetaByThreadIDsResponse"
+},
+"mails.GetMailMessageFullByMessageIDsRequest": {
+"cmd": 3664,
+"resp": "mails.GetMailMessageFullByMessageIDsResponse"
+},
+"mails.GetMailMessageBodyByMessageIDsRequest": {
+"cmd": 3665,
+"resp": "mailentities.MailMessageBody"
+},
+"mails.MailSyncStatusRequest": {
+"cmd": 3667,
+"resp": "mails.MailSyncStatusResponse"
 },
 "mails.DeleteMailExternalContactRequest": {
 "cmd": 3669,
@@ -2698,6 +2746,10 @@
 "mails.GetMailSettingsRequest": {
 "cmd": 3700,
 "resp": "mails.GetMailSettingsResponse"
+},
+"mails.UpdateMailSettingsRequest": {
+"cmd": 3701,
+"resp": "mails.UpdateMailSettingsResponse"
 },
 "mails.PushMailSettingRequest": {
 "cmd": 3702,
@@ -2711,6 +2763,10 @@
 "cmd": 3706,
 "resp": "mails.MailGetGoogleAuthURLResponse"
 },
+"mails.GetCanShareToExternalRequest": {
+"cmd": 3707,
+"resp": "mails.GetCanShareToExternalResponse"
+},
 "mails.GetTenantDomainsRequest": {
 "cmd": 3709,
 "resp": "mails.GetTenantDomainsResponse"
@@ -2719,9 +2775,45 @@
 "cmd": 3712,
 "resp": "mails.GetMailCardResponse"
 },
+"mails.SyncAliasRequest": {
+"cmd": 3723,
+"resp": "mails.SyncAliasResponse"
+},
 "mails.UploadMailRiskEventRequest": {
 "cmd": 3730,
 "resp": "mails.UploadMailRiskEventResponse"
+},
+"mails.CreateRuleRequest": {
+"cmd": 3750,
+"resp": "mails.CreateRuleResponse"
+},
+"mails.UpdateRuleRequest": {
+"cmd": 3751,
+"resp": "mails.UpdateRuleResponse"
+},
+"mails.DeleteRuleRequest": {
+"cmd": 3752,
+"resp": "mails.DeleteRuleResponse"
+},
+"mails.GetRulesRequest": {
+"cmd": 3753,
+"resp": "mails.RuleStruct"
+},
+"mails.RuleControlRequest": {
+"cmd": 3754,
+"resp": "mails.RuleControlResponse"
+},
+"mails.GetMailMessageSummaryRequest": {
+"cmd": 3791,
+"resp": "mails.GetMailMessageSummaryResponse"
+},
+"mails.GetMailMessageBodyRequest": {
+"cmd": 3792,
+"resp": "mails.GetMailMessageBodyResponse"
+},
+"mails.GetMigrationStatusRequest": {
+"cmd": 3796,
+"resp": "mails.GetMigrationStatusResponse"
 },
 "mails.PullChatsMailSettingRequest": {
 "cmd": 3801,
@@ -2755,14 +2847,42 @@
 "cmd": 3822,
 "resp": "im.v1.GetMessagePreviewsResponse"
 },
+"mails.MailImapMigrationUpdateTokenRequest": {
+"cmd": 3822,
+"resp": "mails.MailImapMigrationUpdateTokenResponse"
+},
+"mails.MailImapMigrationQueryProgressRequest": {
+"cmd": 3827,
+"resp": "mails.MailImapMigrationQueryProgressResponse"
+},
+"mails.MailImapMigrationGetMailBoxInfosRequest": {
+"cmd": 3829,
+"resp": "mailentities.MailImapMigrationMailboxInfo"
+},
+"mails.MailImapMigrationBlockedRequest": {
+"cmd": 3830,
+"resp": "mails.MailImapMigrationBlockedResponse"
+},
+"mail_migration.MailIMAPMigrationGetHistoryDoneInfoRequest": {
+"cmd": 3832,
+"resp": "mail_migration.MailIMAPMigrationGetHistoryDoneInfoResponse"
+},
 "im.v1.PushMessagePreviewsRequest": {
 "cmd": 3833,
 "resp": "im.v1.PushMessagePreviewsRequest",
 "push": true
 },
+"mail_migration.MailIMAPMigrationGetAllAccountStatusRequest": {
+"cmd": 3833,
+"resp": "mail_migration.MailIMAPMigrationGetAllAccountStatusResponse"
+},
 "im.v1.PutUrlPreviewActionRequest": {
 "cmd": 3834,
 "resp": "im.v1.PutUrlPreviewActionResponse"
+},
+"mail_migration.MailIMAPMigrationVerifyTokenRequest": {
+"cmd": 3834,
+"resp": "mail_migration.MailIMAPMigrationVerifyTokenResponse"
 },
 "mail_migration.MailImapMigrationGetAuthInfoRequest": {
 "cmd": 3835,
@@ -6591,6 +6711,10 @@
 "cmd": 1010048,
 "resp": "calendarevents.ListCalendarEventsResponse"
 },
+"calendarevents.CreateCalendarEventRequest": {
+"cmd": 1010052,
+"resp": "calendarevents.CreateCalendarEventResponse"
+},
 "calendarevents.JoinCalendarEventV2Request": {
 "cmd": 1010058,
 "resp": "calendarevents.JoinCalendarEventV2Response"
@@ -9927,6 +10051,12 @@
 "cmd": 201,
 "req": "appconfig.PullAppConfigRequest",
 "resp": "appconfig.PullAppConfigResponse",
+"name": ""
+},
+{
+"cmd": 201,
+"req": "appconfig.PullAppConfigRequest",
+"resp": "entities.AppConfig",
 "name": ""
 }
 ],
@@ -14090,6 +14220,22 @@
 "name": "GET_ALL_TIME_CONTAINER"
 }
 ],
+"3507": [
+{
+"cmd": 3507,
+"req": "mailchanges.MailAddChangeRequest",
+"resp": "mailchanges.MailAddChangeResponse",
+"name": ""
+}
+],
+"3511": [
+{
+"cmd": 3511,
+"req": "mails.MailApplyRuleRequest",
+"resp": "mails.MailApplyRuleResponse",
+"name": ""
+}
+],
 "3516": [
 {
 "cmd": 3516,
@@ -14111,6 +14257,22 @@
 "cmd": 3518,
 "req": "mails.CopyMailCardFileRequest",
 "resp": "mails.CopyMailCardFileResponse",
+"name": ""
+}
+],
+"3600": [
+{
+"cmd": 3600,
+"req": "mails.MailInitSyncRequest",
+"resp": "mails.MailInitSyncResponse",
+"name": ""
+}
+],
+"3601": [
+{
+"cmd": 3601,
+"req": "mails.GetMailThreadMetaRequest",
+"resp": "mails.GetMailThreadMetaResponse",
 "name": ""
 }
 ],
@@ -14162,11 +14324,75 @@
 "name": ""
 }
 ],
+"3650": [
+{
+"cmd": 3650,
+"req": "mails.MailAtContactRequest",
+"resp": "mails.MailAtContactResponse",
+"name": ""
+}
+],
+"3656": [
+{
+"cmd": 3656,
+"req": "mails.RulePreviewRequest",
+"resp": "mails.MessagesSummary",
+"name": ""
+}
+],
+"3657": [
+{
+"cmd": 3657,
+"req": "mails.MailContactSearchRequest",
+"resp": "mails.MailContactSearchResult",
+"name": ""
+}
+],
 "3658": [
 {
 "cmd": 3658,
 "req": "mails.MailAdvancedSearchRequest",
 "resp": "mails.MailAdvancedSearchResponse",
+"name": ""
+}
+],
+"3660": [
+{
+"cmd": 3660,
+"req": "mails.MailRequestParams",
+"resp": "mails.GetUnreadMailThreadMetaResponse",
+"name": ""
+}
+],
+"3662": [
+{
+"cmd": 3662,
+"req": "mails.GetThreadMetaByThreadIDsRequest",
+"resp": "mails.GetThreadMetaByThreadIDsResponse",
+"name": ""
+}
+],
+"3664": [
+{
+"cmd": 3664,
+"req": "mails.GetMailMessageFullByMessageIDsRequest",
+"resp": "mails.GetMailMessageFullByMessageIDsResponse",
+"name": ""
+}
+],
+"3665": [
+{
+"cmd": 3665,
+"req": "mails.GetMailMessageBodyByMessageIDsRequest",
+"resp": "mailentities.MailMessageBody",
+"name": ""
+}
+],
+"3667": [
+{
+"cmd": 3667,
+"req": "mails.MailSyncStatusRequest",
+"resp": "mails.MailSyncStatusResponse",
 "name": ""
 }
 ],
@@ -14183,6 +14409,14 @@
 "cmd": 3700,
 "req": "mails.GetMailSettingsRequest",
 "resp": "mails.GetMailSettingsResponse",
+"name": ""
+}
+],
+"3701": [
+{
+"cmd": 3701,
+"req": "mails.UpdateMailSettingsRequest",
+"resp": "mails.UpdateMailSettingsResponse",
 "name": ""
 }
 ],
@@ -14210,6 +14444,14 @@
 "name": ""
 }
 ],
+"3707": [
+{
+"cmd": 3707,
+"req": "mails.GetCanShareToExternalRequest",
+"resp": "mails.GetCanShareToExternalResponse",
+"name": ""
+}
+],
 "3709": [
 {
 "cmd": 3709,
@@ -14226,11 +14468,89 @@
 "name": ""
 }
 ],
+"3723": [
+{
+"cmd": 3723,
+"req": "mails.SyncAliasRequest",
+"resp": "mails.SyncAliasResponse",
+"name": ""
+}
+],
 "3730": [
 {
 "cmd": 3730,
 "req": "mails.UploadMailRiskEventRequest",
 "resp": "mails.UploadMailRiskEventResponse",
+"name": ""
+},
+{
+"cmd": 3730,
+"req": "mails.UploadMailRiskEventRequest",
+"resp": "mails.UploadMailRiskEventRequest",
+"name": ""
+}
+],
+"3750": [
+{
+"cmd": 3750,
+"req": "mails.CreateRuleRequest",
+"resp": "mails.CreateRuleResponse",
+"name": ""
+}
+],
+"3751": [
+{
+"cmd": 3751,
+"req": "mails.UpdateRuleRequest",
+"resp": "mails.UpdateRuleResponse",
+"name": ""
+}
+],
+"3752": [
+{
+"cmd": 3752,
+"req": "mails.DeleteRuleRequest",
+"resp": "mails.DeleteRuleResponse",
+"name": ""
+}
+],
+"3753": [
+{
+"cmd": 3753,
+"req": "mails.GetRulesRequest",
+"resp": "mails.RuleStruct",
+"name": ""
+}
+],
+"3754": [
+{
+"cmd": 3754,
+"req": "mails.RuleControlRequest",
+"resp": "mails.RuleControlResponse",
+"name": ""
+}
+],
+"3791": [
+{
+"cmd": 3791,
+"req": "mails.GetMailMessageSummaryRequest",
+"resp": "mails.GetMailMessageSummaryResponse",
+"name": ""
+}
+],
+"3792": [
+{
+"cmd": 3792,
+"req": "mails.GetMailMessageBodyRequest",
+"resp": "mails.GetMailMessageBodyResponse",
+"name": ""
+}
+],
+"3796": [
+{
+"cmd": 3796,
+"req": "mails.GetMigrationStatusRequest",
+"resp": "mails.GetMigrationStatusResponse",
 "name": ""
 }
 ],
@@ -14296,6 +14616,44 @@
 "req": "im.v1.GetMessagePreviewsRequest",
 "resp": "im.v1.GetMessagePreviewsResponse",
 "name": "GET_MESSAGE_PREVIEWS"
+},
+{
+"cmd": 3822,
+"req": "mails.MailImapMigrationUpdateTokenRequest",
+"resp": "mails.MailImapMigrationUpdateTokenResponse",
+"name": ""
+}
+],
+"3827": [
+{
+"cmd": 3827,
+"req": "mails.MailImapMigrationQueryProgressRequest",
+"resp": "mails.MailImapMigrationQueryProgressResponse",
+"name": ""
+}
+],
+"3829": [
+{
+"cmd": 3829,
+"req": "mails.MailImapMigrationGetMailBoxInfosRequest",
+"resp": "mailentities.MailImapMigrationMailboxInfo",
+"name": ""
+}
+],
+"3830": [
+{
+"cmd": 3830,
+"req": "mails.MailImapMigrationBlockedRequest",
+"resp": "mails.MailImapMigrationBlockedResponse",
+"name": ""
+}
+],
+"3832": [
+{
+"cmd": 3832,
+"req": "mail_migration.MailIMAPMigrationGetHistoryDoneInfoRequest",
+"resp": "mail_migration.MailIMAPMigrationGetHistoryDoneInfoResponse",
+"name": ""
 }
 ],
 "3833": [
@@ -14304,6 +14662,12 @@
 "req": "",
 "resp": "im.v1.PushMessagePreviewsRequest",
 "name": "PUSH_MESSAGE_PREVIEWS"
+},
+{
+"cmd": 3833,
+"req": "mail_migration.MailIMAPMigrationGetAllAccountStatusRequest",
+"resp": "mail_migration.MailIMAPMigrationGetAllAccountStatusResponse",
+"name": ""
 }
 ],
 "3834": [
@@ -14312,6 +14676,12 @@
 "req": "im.v1.PutUrlPreviewActionRequest",
 "resp": "im.v1.PutUrlPreviewActionResponse",
 "name": "PUT_URL_PREVIEW_ACTION"
+},
+{
+"cmd": 3834,
+"req": "mail_migration.MailIMAPMigrationVerifyTokenRequest",
+"resp": "mail_migration.MailIMAPMigrationVerifyTokenResponse",
+"name": ""
 }
 ],
 "3835": [
@@ -18468,6 +18838,12 @@
 "req": "docs.PullDocPermsRequest",
 "resp": "docs.PullDocPermsResponse",
 "name": ""
+},
+{
+"cmd": 14007,
+"req": "docs.PullDocPermsRequest",
+"resp": "entities.DocPermission",
+"name": ""
 }
 ],
 "14008": [
@@ -21715,6 +22091,14 @@
 "cmd": 1010048,
 "req": "calendarevents.ListCalendarEventsRequest",
 "resp": "calendarevents.ListCalendarEventsResponse",
+"name": ""
+}
+],
+"1010052": [
+{
+"cmd": 1010052,
+"req": "calendarevents.CreateCalendarEventRequest",
+"resp": "calendarevents.CreateCalendarEventResponse",
 "name": ""
 }
 ],

@@ -1,6 +1,6 @@
 # lark-agent-x-ts
 
-A TypeScript implementation of a Feishu / Lark web-client messaging channel: log in with a personal account by scanning a QR code, receive all messages over a persistent connection and store them, send messages as yourself, mark messages read, generate message links, call any gateway endpoint, and optionally hook up a local Claude Code as a "digital twin" that auto-replies on your behalf. Bun packages it as a **single-file executable**; the library entry point can be embedded in a Node process.
+A TypeScript implementation of a Feishu / Lark web-client messaging channel: log in with a personal account by scanning a QR code, receive all messages over a persistent connection and store them, send messages as yourself, mark messages read, generate message links, read and send Lark Mail, call any gateway endpoint, and optionally hook up a local Claude Code as a "digital twin" that auto-replies on your behalf. Bun packages it as a **single-file executable**; the library entry point can be embedded in a Node process.
 
 ## Install and build
 
@@ -47,6 +47,7 @@ Put `dist/lark` on your PATH. `lark --version` prints the version and build comm
 | `lark get <msg_id...>` | Fetch messages by id (works across chats; `--save` stores them, `--json`) |
 | `lark thread <root_id>` | Fetch a thread: the root message plus recent replies (`--count`, `--save`, `--json`) |
 | `lark download <msg_id> -o <path>` | Download the image/file in a message (fetched from the server if the message isn't stored locally) |
+| `lark mail <action>` | Lark Mail for the logged-in account; see [Mail](#mail) |
 | `lark api <type_name> '<json>'` | Call any gateway endpoint (type names are in `assets/cmd_map.json`) |
 | `lark chats` / `lark sessions` | Chat list from the local store (`--remote` pulls the server-side list: direct and group chats in your inbox, most recent first, `--limit`, `--json`) / agent session table |
 | `lark search <keyword>` | Search users/groups |
@@ -55,6 +56,34 @@ Put `dist/lark` on your PATH. `lark --version` prints the version and build comm
 | `lark members <chat_id>` / `lark users <user_id...>` | Chat members (id, name, user/bot) / look up user names in bulk; with `--names`, `history`, `get` and `thread` show senders by name |
 | `lark config` | Show the effective configuration |
 | `lark permissions` | Show which permission group each command belongs to and whether it can run now (`--json`); `edit` edits the current account's rules interactively in the terminal, `clear` clears them; see [Command permissions](#command-permissions) |
+
+## Mail
+
+`lark mail <action> [args]` reads and sends Lark Mail as you, over the same gateway as messages (no Open Platform app needed). Thread ids come from `list` and `search`, message ids from `thread` and `get`. Labels can be given by id or name (`inbox`, `sent`, `draft`, `archived`, `trash`, `spam`, `flagged`, or a user label or folder name as `labels` shows it). Unlike the chat commands, mail output is in English.
+
+| Action | Description |
+|-------|------|
+| `labels` / `addresses` | Labels and folders with unread counts / the account's sending addresses (default first) |
+| `list [label]` | Threads under a label, newest first (default `inbox`; `--limit`; `--before <time>` lists older threads, so pass the last thread's `updatedAt` from `--json` to page exactly; `--unread` keeps only the unread threads among those listed; `--json`) |
+| `thread <thread_id>` / `get <message_id...>` | A whole conversation / messages by id, with bodies and attachments (`--html` prints the HTML body, `--json`) |
+| `search <keyword>` | Server-side search (`--from`, `--to`, `--subject`, `--label`, `--since` / `--until`, `--attachments`, `--limit`, `--json`) |
+| `download <message_id>` | Save a message's attachments (`-o <dir>`, default the current directory) |
+| `send <body>` | Send a new email: `--to`, `--cc`, `--bcc` (comma-separated), `--subject`, `--attach <paths>`, `--from <address>`; `--html` treats the body as HTML, `--body-file` reads it from a file, `--draft` only saves a draft |
+| `reply <message_id> <body>` | Reply in the thread, quoting the original (`--all` replies to everyone, `--no-quote`, `--attach`, `--draft`) |
+| `forward <message_id> <body>` | Forward with the original's attachments (`--to` required, `--cc`, `--bcc`, `--attach`, `--draft`) |
+| `send-draft <draft_id>` / `delete-draft <draft_id...>` | Send a saved draft / delete drafts |
+| `read <thread_id...>` | Mark threads read (`--unread` marks them unread) |
+| `flag <thread_id...>` / `label <label> <thread_id...>` | Flag threads / add a label (`--remove` undoes either) |
+| `archive <thread_id...>` / `trash <thread_id...>` | Archive (`--undo` moves back to the inbox) / move to the trash (`--restore` restores) |
+
+```bash
+lark mail list --limit 10
+lark mail send --to someone@example.com --subject "Weekly report" "Hi,\nthe report is attached." --attach report.pdf
+lark mail reply <message_id> "Thanks, looks good." --all
+lark mail search invoice --since 30d --attachments
+```
+
+Each action is its own permission item (`mail.list`, `mail.send`, ...); saving a draft (`--draft`) only needs `mail.draft`. See [Command permissions](#command-permissions).
 
 ## Configuration
 
@@ -82,10 +111,10 @@ Each command can be allowed or denied individually or by group, to limit what th
 | Group | Contains |
 |---|---|
 | `local` | Read-only local data: `auth status`, `config`, `chats` (local list), `sessions`, `messages`, `permissions` (viewing) |
-| `query` | Read-only Feishu data: `auth check`, `chats --remote`, `history`, `get`, `thread`, `search`, `search-messages`, `unread`, `members`, `users`, `reactions`, `read-status`, `pins`, `flags`, `tags`, `translate`, `message-link`, `self-chat`, `download`, plus listing with `scheduled` and `shortcut` |
-| `outbound` | Sends new messages: `send`, `send-image`, `send-file`, `schedule`, `forward`, plus cancelling and rescheduling with `scheduled` |
+| `query` | Read-only Feishu data: `auth check`, `chats --remote`, `history`, `get`, `thread`, `search`, `search-messages`, `unread`, `members`, `users`, `reactions`, `read-status`, `pins`, `flags`, `tags`, `translate`, `message-link`, `self-chat`, `download`, plus listing with `scheduled` and `shortcut`, and reading with `mail` (`labels`, `addresses`, `list`, `thread`, `get`, `search`, `download`) |
+| `outbound` | Sends new messages: `send`, `send-image`, `send-file`, `schedule`, `forward`, plus cancelling and rescheduling with `scheduled`, and `mail` `send` / `reply` / `forward` / `send-draft` |
 | `modify` | Changes existing messages or state others can see: `recall`, `edit`, `react`, `pin`, `read` |
-| `organize` | Personal organization that only affects you: `flag`, plus pinning and unpinning with `shortcut` |
+| `organize` | Personal organization that only affects you: `flag`, plus pinning and unpinning with `shortcut`, and `mail` `draft` (saving with `--draft`) / `delete-draft` / `read` / `flag` / `label` / `archive` / `trash` |
 | `manage` | Group management: `group` `create` / `add` / `remove` / `rename` |
 | `system` | Account- and process-level: `auth` `qr` / `import`, `listen`, `api`, `permissions` `edit` / `clear` |
 
@@ -113,7 +142,7 @@ LARKX_ALLOW=group.rename
 
 ## Using as a library
 
-The library entry point works under both Node (≥ 22.19) and Bun, and exports login credentials, the gateway client, the persistent message connection, and resource downloads. The message store (`Bun.SQL`) and local agent (`Bun.spawn`) depend on Bun and are only used by the CLI. When installed as a git dependency, Node loads `lib/` compiled by `prepare`, while Bun loads `src/` directly (TypeScript projects can set `customConditions: ["bun"]` in tsconfig to type-check against the source directly, without depending on `lib/`). When bundling this library into your own Bun single-file executable, `import 'lark-agent-x-ts/bun-assets'` at your entry point so the protocol assets get embedded.
+The library entry point works under both Node (≥ 22.19) and Bun, and exports login credentials, the gateway client, the persistent message connection, resource downloads, and Lark Mail. The message store (`Bun.SQL`) and local agent (`Bun.spawn`) depend on Bun and are only used by the CLI. When installed as a git dependency, Node loads `lib/` compiled by `prepare`, while Bun loads `src/` directly (TypeScript projects can set `customConditions: ["bun"]` in tsconfig to type-check against the source directly, without depending on `lib/`). When bundling this library into your own Bun single-file executable, `import 'lark-agent-x-ts/bun-assets'` at your entry point so the protocol assets get embedded.
 
 ```ts
 import { LarkAuth, LarkClient, PermissionDenied, setLogSink } from 'lark-agent-x-ts';
@@ -139,6 +168,13 @@ const hits = await client.searchMessages('monthly report', { since: Date.now() -
 const [quoted] = await client.getMessages(['<msg_id>']); // fetch messages by id; threadMessages(rootId) fetches a whole thread
 const missed = await client.missedMessages(Date.now() - 10 * 60_000); // backfill after reconnecting: messages that arrived after a given time (including thread replies)
 
+// Lark Mail: client.mail, same credentials and permission rules
+const threads = await client.mail.threads('INBOX', { limit: 20 }); // newest first; pass { before: threads.at(-1).updatedAt } for the next page
+const conversation = await client.mail.thread(threads[0].threadId); // messages with text, HTML and attachments
+await client.mail.send({ to: ['someone@example.com'], subject: 'Hi', text: 'Hello', attachments: [{ name: 'a.pdf', data: readFileSync('a.pdf') }] });
+await client.mail.reply('<message_id>', { text: 'Thanks', all: true }); // also forward, sendDraft, deleteDrafts; { draftOnly: true } saves a draft
+await client.mail.markRead([threads[0].threadId]); // also flag, archive, trash, modifyThreads (labels), search, labels, downloadAttachment
+
 // Permissions: not checked by default (everything allowed). permissions: true uses the same rules as the CLI, or pass a rule set directly
 const guarded = await LarkClient.create(new LarkAuth(), { permissions: { allow: ['query', 'send'], deny: ['*'] } });
 await guarded.recallMessage('<msg_id>').catch((e) => e instanceof PermissionDenied && e.permission); // 'recall'
@@ -147,7 +183,7 @@ await guarded.recallMessage('<msg_id>').catch((e) => e instanceof PermissionDeni
 **Permissions**: the `permissions` option of `LarkClient.create` enables the same [command permissions](#command-permissions) as the CLI. When omitted, nothing is checked, same as before.
 
 - `true`: uses this account's rules from `permissions.json` next to the credentials, falling back to `LARKX_ALLOW` / `LARKX_DENY`; rules are re-read on every call, so changes take effect without a restart. You can also pass `{ allow, deny }` directly.
-- Each public method maps to a permission item of the same name (classified under the closest command, e.g. `addMembers` → `group.add`, `sendMessage` maps to `send` / `send-image` / `send-file` depending on content, `api` and `gatewayPost` → `api`). When not allowed, it throws `PermissionDenied` (with `permission`, `group`, `rule`).
+- Each public method maps to a permission item of the same name (classified under the closest command, e.g. `addMembers` → `group.add`, `sendMessage` maps to `send` / `send-image` / `send-file` depending on content, `api` and `gatewayPost` → `api`). `client.mail` methods map to the `mail.*` items (`threads` → `mail.list`, `send` → `mail.send`, or `mail.draft` with `draftOnly`). When not allowed, it throws `PermissionDenied` (with `permission`, `group`, `rule`).
 - Only the layer the caller invokes directly is checked: methods called internally by another method (e.g. the gateway call made while sending) are not checked again. Callbacks passed to methods (e.g. the persistent connection's `onMessage`) don't count as part of the method; calls made inside them are checked as usual.
 - The standalone functions `uploadImage`, `uploadFile` and `downloadMessageResource` don't go through the client and are not subject to permissions.
 - `PERMISSIONS`, `GROUPS`, `decide`, `loadRules` and `saveAccountRules` are exported too, for building your own permissions UI.
@@ -167,7 +203,7 @@ LARKX_TEST_MYSQL_URL=mysql+pymysql://root:test@127.0.0.1:33306/larkx bun test   
 ## Risks and disclaimer
 
 - This is an unofficial implementation of the Feishu web client's internal protocol, and is not affiliated with ByteDance / Feishu / Lark in any way. The protocol may change at any time and break it.
-- The full gateway definitions and endpoint mapping under `assets/` (`lark_all.binpb`, `core.binpb`, `cmd_map.json`) are extracted automatically by the pipeline from scripts served by the Feishu web client. All rights belong to ByteDance; they are included only for interoperability and are not the work of this repository or the original author.
+- The full gateway definitions and endpoint mapping under `assets/` (`lark_all.binpb`, `core.binpb`, `cmd_map.json`) are extracted automatically by the pipeline from scripts served by the Feishu / Lark web client and the Lark Mail web app. All rights belong to ByteDance; they are included only for interoperability and are not the work of this repository or the original author.
 - Sending and receiving messages with a personal account through an unofficial client carries a risk of triggering account risk controls. Use it only on your own account and in ways whose consequences you can accept; do not use it for bulk messaging or harassing others. Comply with the Feishu / Lark terms of service and the laws of your jurisdiction.
 - This project is provided as is, without any express or implied warranty; users bear all responsibility for account bans, data loss or other damage resulting from its use.
 - Credentials (cookies) are equivalent to a logged-in session. They are stored only in the local data directory; do not commit or share them.

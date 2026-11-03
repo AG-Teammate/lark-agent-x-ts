@@ -7,6 +7,7 @@ import { AuthExpired, LarkAuth, QR_STATUS_NAMES, QrLogin } from '../auth.js';
 import { LarkClient, type SendOptions } from '../client.js';
 import { dataDir, loadConfig } from '../config.js';
 import { getLogger } from '../log.js';
+import { htmlToText, type MailAddress, type MailFile, type MailMessage } from '../mail.js';
 import { download, extractResourceKey, messageResourceUrl } from '../media.js';
 import {
   decide,
@@ -1656,6 +1657,326 @@ const permissions: Command = {
   },
 };
 
+const MAIL_ACTIONS = [
+  'labels',
+  'addresses',
+  'list',
+  'thread',
+  'get',
+  'search',
+  'download',
+  'send',
+  'reply',
+  'forward',
+  'send-draft',
+  'delete-draft',
+  'read',
+  'flag',
+  'label',
+  'archive',
+  'trash',
+] as const;
+type MailAction = (typeof MAIL_ACTIONS)[number];
+
+const fmtAddress = (a: MailAddress) => (a.name ? `${a.name} <${a.address}>` : a.address);
+const fmtSize = (n: number) =>
+  n < 1024
+    ? `${n} B`
+    : n < 1048576
+      ? `${(n / 1024).toFixed(1)} KB`
+      : `${(n / 1048576).toFixed(1)} MB`;
+
+function printMailMessage(m: MailMessage, html: boolean): void {
+  out(`== ${m.subject || '(no subject)'}`);
+  out(`message_id: ${m.messageId}`);
+  out(`thread_id: ${m.threadId}`);
+  out(`date: ${localDatetime(m.createdAt)}`);
+  out(`from: ${fmtAddress(m.from)}`);
+  if (m.to.length) out(`to: ${m.to.map(fmtAddress).join(', ')}`);
+  if (m.cc.length) out(`cc: ${m.cc.map(fmtAddress).join(', ')}`);
+  if (m.bcc.length) out(`bcc: ${m.bcc.map(fmtAddress).join(', ')}`);
+  out(`labels: ${m.labels.join(', ')}${m.draft ? ' (draft)' : ''}`);
+  for (const a of m.attachments) out(`attachment: ${a.name} (${fmtSize(a.size)}) ${a.fileKey}`);
+  out('');
+  out(html ? m.html : m.text || htmlToText(m.html));
+  out('');
+}
+
+/** Files named on the command line (comma-separated paths) → attachments. */
+function readAttachments(v: Parsed[string]): MailFile[] {
+  return (list(v) ?? []).map((path) => ({
+    name: basename(path),
+    data: new Uint8Array(readFileSync(path)),
+  }));
+}
+
+/** Body from the positional words or --body-file; --html marks it as HTML. */
+function mailBody(a: Parsed, words: string[]): { text?: string; html?: string } {
+  const body = a.body_file ? readFileSync(String(a.body_file), 'utf8') : words.join(' ');
+  return a.html ? { html: body } : { text: body.replace(/\\n/g, '\n') };
+}
+
+const mailCmd: Command = {
+  name: 'mail',
+  help: 'Lark Mail: list/thread/get/search/download, send/reply/forward, read/flag/label/archive/trash, labels',
+  access: (a) => {
+    const action = a.action as MailAction;
+    if (a.draft && (action === 'send' || action === 'reply' || action === 'forward'))
+      return 'mail.draft';
+    return `mail.${action}`;
+  },
+  positionals: [
+    { name: 'action', choices: MAIL_ACTIONS },
+    {
+      name: 'args',
+      nargs: '*',
+      help: 'ids, label, keyword or body text, depending on the action',
+    },
+  ],
+  options: [
+    { name: 'to', kind: 'string', help: 'recipients (comma-separated)' },
+    { name: 'cc', kind: 'string', help: 'cc recipients (comma-separated)' },
+    { name: 'bcc', kind: 'string', help: 'bcc recipients (comma-separated)' },
+    {
+      name: 'subject',
+      kind: 'string',
+      help: 'subject (send); subject filter (search, comma-separated)',
+    },
+    {
+      name: 'from',
+      kind: 'string',
+      help: 'sender address (send/reply/forward); sender filter (search)',
+    },
+    { name: 'attach', kind: 'string', help: 'files to attach (comma-separated paths)' },
+    { name: 'body-file', kind: 'string', help: 'read the body from a file' },
+    {
+      name: 'html',
+      kind: 'flag',
+      help: 'the body is HTML (send/reply/forward); print HTML bodies (thread/get)',
+    },
+    {
+      name: 'draft',
+      kind: 'flag',
+      help: 'save as a draft instead of sending (send/reply/forward)',
+    },
+    { name: 'all', kind: 'flag', help: 'reply to all recipients' },
+    { name: 'no-quote', kind: 'flag', help: 'reply without quoting the original' },
+    { name: 'label', kind: 'string', help: 'restrict search to a label' },
+    { name: 'since', kind: 'string', help: 'search from this time (3d, 2026-10-01, timestamp)' },
+    { name: 'until', kind: 'string', help: 'search until this time' },
+    { name: 'attachments', kind: 'flag', help: 'search only mail with attachments' },
+    { name: 'before', kind: 'string', help: 'list threads older than this time (paging)' },
+    { name: 'unread', kind: 'flag', help: 'list: only unread threads; read: mark unread instead' },
+    { name: 'remove', kind: 'flag', help: 'flag/label: remove instead of add' },
+    { name: 'undo', kind: 'flag', help: 'archive: move back to the inbox' },
+    { name: 'restore', kind: 'flag', help: 'trash: restore from the trash' },
+    {
+      name: 'output',
+      short: '-o',
+      kind: 'string',
+      default: '.',
+      help: 'download: target directory',
+    },
+    { name: 'limit', kind: 'int', default: 20 },
+    { name: 'json', kind: 'flag' },
+  ],
+  async run(a) {
+    const action = a.action as MailAction;
+    const args = (a.args as string[] | undefined) ?? [];
+    const need = (n: number, what: string) => {
+      if (args.length < n) throw new UsageHint(`mail ${action}: ${what} required`);
+    };
+    const m = (await client()).mail;
+    const json = Boolean(a.json);
+    try {
+      switch (action) {
+        case 'labels': {
+          const labels = await m.labels();
+          if (json) printJson(labels);
+          else for (const l of labels) out(`${l.id}\t${l.kind}\t${l.name}\tunread ${l.unread}`);
+          return 0;
+        }
+        case 'addresses': {
+          const addrs = await m.addresses();
+          if (json) printJson(addrs);
+          else for (const x of addrs) out(fmtAddress(x));
+          return 0;
+        }
+        case 'list': {
+          const label = await m.resolveLabel(args[0] ?? 'INBOX');
+          let threads = await m.threads(label, {
+            limit: Number(a.limit),
+            ...(a.before ? { before: parseTimeArg(String(a.before)) } : {}),
+          });
+          if (a.unread) threads = threads.filter((t) => t.unread);
+          if (json) printJson(threads);
+          else
+            for (const t of threads) {
+              const l = t.latest;
+              out(
+                `${t.threadId}\t${localDatetime(t.updatedAt)}\t${t.unread ? 'unread' : 'read'}\t${l ? fmtAddress(l.from) : ''}\t${l?.subject || '(no subject)'}${t.messageCount > 1 ? ` (${t.messageCount})` : ''}`,
+              );
+            }
+          return 0;
+        }
+        case 'thread': {
+          need(1, 'thread_id');
+          const msgs = await m.thread(args[0] as string);
+          if (json) printJson(msgs);
+          else for (const x of msgs) printMailMessage(x, Boolean(a.html));
+          return 0;
+        }
+        case 'get': {
+          need(1, 'message_id');
+          const msgs = await m.messages(args);
+          if (json) printJson(msgs);
+          else for (const x of msgs) printMailMessage(x, Boolean(a.html));
+          const missing = args.filter((id) => !msgs.some((x) => x.messageId === id));
+          if (missing.length) err(`not found: ${missing.join(', ')}`);
+          return missing.length ? 1 : 0;
+        }
+        case 'search': {
+          const hits = await m.search(args.join(' '), {
+            ...(a.from ? { from: list(a.from) ?? [] } : {}),
+            ...(a.to ? { to: list(a.to) ?? [] } : {}),
+            ...(a.subject ? { subject: list(a.subject) ?? [] } : {}),
+            ...(a.label ? { label: await m.resolveLabel(String(a.label)) } : {}),
+            ...(a.since ? { since: parseTimeArg(String(a.since)) } : {}),
+            ...(a.until ? { until: parseTimeArg(String(a.until)) } : {}),
+            hasAttachment: Boolean(a.attachments),
+            limit: Number(a.limit),
+          });
+          if (json) printJson(hits);
+          else
+            for (const h of hits)
+              out(
+                `${h.threadId}\t${h.messageId}\t${localDatetime(h.createdAt)}\t${h.from}\t${h.subject}`,
+              );
+          return 0;
+        }
+        case 'download': {
+          need(1, 'message_id');
+          const [msg] = await m.messages([args[0] as string]);
+          if (!msg) {
+            err(`not found: ${args[0]}`);
+            return 1;
+          }
+          if (!msg.attachments.length) {
+            err('this message has no attachments');
+            return 1;
+          }
+          const dir = String(a.output);
+          mkdirSync(dir, { recursive: true });
+          for (const att of msg.attachments) {
+            const path = join(dir, basename(att.name) || att.fileKey);
+            await Bun.write(path, await m.downloadAttachment(att.fileKey));
+            out(`${path}\t${fmtSize(att.size)}`);
+          }
+          return 0;
+        }
+        case 'send': {
+          const r = await m.send(
+            {
+              to: list(a.to) ?? [],
+              cc: list(a.cc) ?? [],
+              bcc: list(a.bcc) ?? [],
+              subject: String(a.subject ?? ''),
+              ...mailBody(a, args),
+              attachments: readAttachments(a.attach),
+              ...(a.from ? { from: String(a.from) } : {}),
+            },
+            { draftOnly: Boolean(a.draft) },
+          );
+          out(
+            a.draft
+              ? `draft saved draft_id=${r.messageId}`
+              : `sent message_id=${r.messageId} thread_id=${r.threadId}`,
+          );
+          return 0;
+        }
+        case 'reply':
+        case 'forward': {
+          need(1, 'message_id');
+          const [id, ...words] = args;
+          const common = {
+            ...mailBody(a, words),
+            ...(a.to ? { to: list(a.to) ?? [] } : {}),
+            ...(a.cc ? { cc: list(a.cc) ?? [] } : {}),
+            ...(a.bcc ? { bcc: list(a.bcc) ?? [] } : {}),
+            attachments: readAttachments(a.attach),
+            ...(a.from ? { from: String(a.from) } : {}),
+          };
+          const draftOnly = { draftOnly: Boolean(a.draft) };
+          if (action === 'forward' && !a.to) throw new UsageHint('mail forward: --to required');
+          const r =
+            action === 'reply'
+              ? await m.reply(
+                  id as string,
+                  { ...common, all: Boolean(a.all), quote: !a.no_quote },
+                  draftOnly,
+                )
+              : await m.forward(id as string, common, draftOnly);
+          out(
+            a.draft
+              ? `draft saved draft_id=${r.messageId}`
+              : `sent message_id=${r.messageId} thread_id=${r.threadId}`,
+          );
+          return 0;
+        }
+        case 'send-draft': {
+          need(1, 'draft_id');
+          const r = await m.sendDraft(args[0] as string);
+          out(`sent message_id=${r.messageId} thread_id=${r.threadId}`);
+          return 0;
+        }
+        case 'delete-draft':
+          need(1, 'draft_id');
+          await m.deleteDrafts(args);
+          out(`deleted ${args.length} draft(s)`);
+          return 0;
+        case 'read':
+          need(1, 'thread_id');
+          await m.markRead(args, !a.unread);
+          out(`marked ${args.length} thread(s) ${a.unread ? 'unread' : 'read'}`);
+          return 0;
+        case 'flag':
+          need(1, 'thread_id');
+          await m.flag(args, !a.remove);
+          out(`${a.remove ? 'unflagged' : 'flagged'} ${args.length} thread(s)`);
+          return 0;
+        case 'label': {
+          need(2, 'label and thread_id');
+          const [name, ...ids] = args;
+          const id = await m.resolveLabel(name as string);
+          await m.modifyThreads(ids, a.remove ? { remove: [id] } : { add: [id] });
+          out(`${a.remove ? 'removed' : 'added'} label ${name} on ${ids.length} thread(s)`);
+          return 0;
+        }
+        case 'archive':
+          need(1, 'thread_id');
+          await m.archive(args, !a.undo);
+          out(`${a.undo ? 'moved to inbox' : 'archived'} ${args.length} thread(s)`);
+          return 0;
+        case 'trash':
+          need(1, 'thread_id');
+          await m.trash(args, !a.restore);
+          out(`${a.restore ? 'restored' : 'trashed'} ${args.length} thread(s)`);
+          return 0;
+      }
+    } catch (e) {
+      if (e instanceof UsageHint) {
+        err(e.message);
+        return 2;
+      }
+      err(`mail ${action} failed: ${errorText(e)}`);
+      return 1;
+    }
+  },
+};
+
+/** A missing argument for one mail action (the parser can't express per-action arity); exits with 2 like other usage errors. */
+class UsageHint extends Error {}
+
 export const COMMANDS: Command[] = [
   auth,
   send,
@@ -1694,6 +2015,7 @@ export const COMMANDS: Command[] = [
   getCmd,
   thread,
   downloadCmd,
+  mailCmd,
   listen,
   permissions,
 ];

@@ -1,4 +1,4 @@
-// Library entry: exports only the parts that run on both Node and Bun (login credentials, gateway client, message long connection, resource download).
+// Library entry: exports only the parts that run on both Node and Bun (login credentials, gateway client, message long connection, resource download, Lark Mail).
 // The message DB (Bun.SQL) and the local agent (Bun.spawn) depend on Bun and are only used by the CLI; see docs/compat.md.
 export { AuthExpired, LarkAuth, QR_STATUS_NAMES, QrLogin } from './auth.js';
 export {
@@ -24,6 +24,20 @@ export {
 } from './client.js';
 export { HttpError, NetworkError } from './http.js';
 export { type Level, type LogSink, setLogLevel, setLogSink } from './log.js';
+export {
+  LarkMail,
+  MAIL_LABELS,
+  type MailAddress,
+  type MailAttachment,
+  type MailDraft,
+  type MailFile,
+  type MailLabel,
+  type MailMessage,
+  type MailSearchHit,
+  type MailSearchOptions,
+  type MailThread,
+  type SendResult,
+} from './mail.js';
 export {
   downloadMessageResource,
   extractResourceKey,

@@ -4,7 +4,7 @@
  */
 export interface Positional {
   name: string;
-  nargs?: '?' | '+';
+  nargs?: '?' | '+' | '*';
   choices?: readonly string[];
   help?: string;
 }
@@ -47,16 +47,30 @@ export function usage(prog: string, spec: CommandSpec): string {
   }
   for (const p of spec.positionals ?? []) {
     const n = p.choices ? `{${p.choices.join(',')}}` : p.name;
-    parts.push(p.nargs === '?' ? `[${n}]` : p.nargs === '+' ? `${n} [${n} ...]` : n);
+    parts.push(
+      p.nargs === '?'
+        ? `[${n}]`
+        : p.nargs === '+'
+          ? `${n} [${n} ...]`
+          : p.nargs === '*'
+            ? `[${n} ...]`
+            : n,
+    );
   }
   return parts.join(' ');
 }
+
+/** One help row, like argparse: names padded to the help column, or the help on its own line when the names are too long. */
+const helpLine = (names: string, text = '') =>
+  names.length < 20 || !text
+    ? `  ${names.padEnd(20)}${text}`
+    : `  ${names}\n${' '.repeat(22)}${text}`;
 
 export function help(prog: string, spec: CommandSpec): string {
   const lines = [usage(prog, spec), ''];
   if (spec.positionals?.length) {
     lines.push('positional arguments:');
-    for (const p of spec.positionals) lines.push(`  ${p.name.padEnd(20)}${p.help ?? ''}`);
+    for (const p of spec.positionals) lines.push(helpLine(p.name, p.help));
     lines.push('');
   }
   lines.push('options:');
@@ -64,7 +78,7 @@ export function help(prog: string, spec: CommandSpec): string {
   for (const o of spec.options ?? []) {
     const names = [o.short, `--${o.name}`].filter(Boolean).join(', ');
     const s = o.kind === 'flag' ? names : `${names} ${metavar(o)}`;
-    lines.push(`  ${s.padEnd(20)}${o.help ?? ''}`);
+    lines.push(helpLine(s, o.help));
   }
   return lines.join('\n');
 }
@@ -111,12 +125,17 @@ export function parse(prog: string, spec: CommandSpec, argv: string[]): Parsed {
     rest.push(a);
   }
   const positionals = spec.positionals ?? [];
-  const required = positionals.filter((p) => p.nargs !== '?');
+  const optional = (p: Positional) => p.nargs === '?' || p.nargs === '*';
+  const required = positionals.filter((p) => !optional(p));
   let idx = 0;
   for (let pi = 0; pi < positionals.length; pi++) {
     const p = positionals[pi] as Positional;
-    const remainingRequired = positionals.slice(pi + 1).filter((x) => x.nargs !== '?').length;
-    if (p.nargs === '+') {
+    const remainingRequired = positionals.slice(pi + 1).filter((x) => !optional(x)).length;
+    if (p.nargs === '*') {
+      const take = Math.max(0, rest.length - idx - remainingRequired);
+      out[p.name] = rest.slice(idx, idx + take);
+      idx += take;
+    } else if (p.nargs === '+') {
       const take = rest.length - idx - remainingRequired;
       if (take < 1) break;
       out[p.name] = rest.slice(idx, idx + take);

@@ -1,6 +1,14 @@
 import { existsSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-import { CDN_BASE, EXTRA_BUNDLES, ensureDir, WORK_DIR } from './common.js';
+import { dirname, join } from 'node:path';
+import {
+  CDN_BASE,
+  EXTRA_BUNDLES,
+  ensureDir,
+  MAIL_BUNDLE,
+  MAIL_CDN_BASE,
+  mailBundlePath,
+  WORK_DIR,
+} from './common.js';
 
 /** Step 2: download all lazy-load chunks (including the base bundles) concurrently → work/chunks/; already-downloaded ones are skipped. */
 const out = ensureDir(join(WORK_DIR, 'chunks'));
@@ -46,3 +54,21 @@ console.log(
   `done: ${results.length} files, ${fails.length} failures, total ${(total / 1e6).toFixed(1)} MB`,
 );
 for (const [name, status] of fails) console.log(' ', name, status);
+
+// The Lark Mail bundle (mail cmd table), kept apart from the messenger chunks
+const mailPath = mailBundlePath(WORK_DIR);
+if (!existsSync(mailPath) || statSync(mailPath).size === 0) {
+  ensureDir(dirname(mailPath));
+  const res = await fetch(`${MAIL_CDN_BASE}/${MAIL_BUNDLE}.chunk.js`, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok)
+    throw new Error(
+      `Mail bundle ${MAIL_BUNDLE} download failed: HTTP ${res.status} (the file name changes with each Mail release, see README)`,
+    );
+  await Bun.write(mailPath, new Uint8Array(await res.arrayBuffer()));
+}
+console.log(
+  `mail bundle: ${join('mail', MAIL_BUNDLE.split('/').at(-1) as string)}.chunk.js, ${statSync(mailPath).size} bytes`,
+);

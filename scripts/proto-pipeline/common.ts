@@ -2,8 +2,8 @@ import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
- * Shared parts of the protocol-asset regeneration pipeline (ported from the fork's dev/proto_pipeline; output is
- * byte-identical to the original). Work dir `LARK_WORK_DIR` (inputs and intermediates, default
+ * Shared parts of the protocol-asset regeneration pipeline (ported from the fork's dev/proto_pipeline; on the same
+ * messenger inputs the output is byte-identical to the original, plus the Lark Mail stage, see mail.ts). Work dir `LARK_WORK_DIR` (inputs and intermediates, default
  * scripts/proto-pipeline/work), output dir `LARK_PROTO_OUT` (.proto files and cmd table, default scripts/proto-pipeline/out).
  */
 const here = import.meta.dir;
@@ -26,6 +26,16 @@ export const BASE_BUNDLES = (
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
+
+/**
+ * Lark Mail web app bundle (`static/js/mail/<locale>.<hash>.chunk.js` on the mail page; the hash changes with each
+ * Mail release). It carries the mail cmd table the messenger bundles lack. Override with `LARK_MAIL_BUNDLE=mail/en-US.xxxx`.
+ */
+export const MAIL_CDN_BASE =
+  'https://sf16-scmcdn.larksuitecdn.com/obj/lark-static-sg/lark/mail/online/static/js';
+export const MAIL_BUNDLE = process.env.LARK_MAIL_BUNDLE || 'mail/en-US.c5353a6f';
+export const mailBundlePath = (workDir: string): string =>
+  join(workDir, 'mail', `${MAIL_BUNDLE.split('/').at(-1)}.chunk.js`);
 
 /** Bundles always downloaded (chunk id → hash): the base bundles themselves and 8929; they take part in step 3 extraction even if absent from the chunk map. */
 export const EXTRA_BUNDLES: Record<string, string> = {

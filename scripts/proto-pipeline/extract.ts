@@ -1,7 +1,8 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pyDumps } from '../../src/pyjson.js';
-import { readText, WORK_DIR } from './common.js';
+import { mailBundlePath, readText, WORK_DIR } from './common.js';
+import { extractMailCmds, extractMailSchemas } from './mail.js';
 
 /** Step 3: extract the schema registry and cmd map from all chunks → work/schemas_all.json, work/cmd_map.json. */
 const REG = /register\("([a-zA-Z0-9_.]+)","([a-zA-Z0-9_.]+)",\{/g;
@@ -53,6 +54,23 @@ for (const file of files) {
   for (const m of src.matchAll(CMD))
     if (!cmdMap.has(m[1] as string)) cmdMap.set(m[1] as string, file);
 }
+// The Lark Mail bundle goes last, so messenger schemas and cmd rows win wherever both define the same name
+const mailSrc = await readText(mailBundlePath(WORK_DIR));
+let mailSchemas = 0;
+for (const [full, body] of extractMailSchemas(mailSrc)) {
+  const dot = full.indexOf('.');
+  const key = `${full.slice(0, dot)}\u0000${full.slice(dot + 1)}`;
+  if (allRegs.has(key)) continue;
+  allRegs.set(key, { ns: full.slice(0, dot), name: full.slice(dot + 1), body });
+  mailSchemas += 1;
+}
+let mailCmds = 0;
+for (const row of extractMailCmds(mailSrc))
+  if (!cmdMap.has(row)) {
+    cmdMap.set(row, 'mail');
+    mailCmds += 1;
+  }
+console.log('mail bundle: new schemas', mailSchemas, 'new cmd rows', mailCmds);
 console.log('files:', files.length);
 console.log('schemas:', allRegs.size);
 console.log('cmd mappings:', cmdMap.size);
