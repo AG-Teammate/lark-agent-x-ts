@@ -133,6 +133,122 @@ export interface MailChangeResult {
   failed: Array<{ messageId: string; reason: string }>;
 }
 
+/** What a mailbox change-log entry did; see MailEvent. */
+export type MailEventKind =
+  | 'received'
+  | 'sent'
+  | 'send-status'
+  | 'draft'
+  | 'labels'
+  | 'trash'
+  | 'untrash'
+  | 'resync'
+  | 'other';
+
+/**
+ * One mailbox change, from the change log (in order, each exactly once). Covers changes from every device,
+ * including this one. 'resync' means the gap was too large to replay: re-list what you need.
+ */
+export interface MailEvent {
+  /** Change-log id; ids only increase. */
+  changeId: number;
+  kind: MailEventKind;
+  /** The server's change type, e.g. message_receive, draft_send, thread_modify, multi_threads_trash. */
+  type: string;
+  messageIds: string[];
+  threadIds: string[];
+  /** received / sent: the message's labels after the change. */
+  labels: string[];
+  /** labels: label ids added and removed. */
+  added: string[];
+  removed: string[];
+  /** received / sent, with enrich: subject, sender and preview. */
+  subject?: string;
+  from?: string;
+  summary?: string;
+  /** The raw change-log entry. */
+  raw: Dict;
+}
+
+export interface MailWatchOptions {
+  /** Start after this change id; default: the current one (only new changes are reported). */
+  fromChangeId?: number;
+  /** How often to pull the change log without a push (ms); default 30 s. Pushes trigger an immediate pull. */
+  pollMs?: number;
+  /** Fetch subject / sender / preview for received and sent mail; default true. */
+  enrich?: boolean;
+  /** Called on pull failures (the watcher keeps going); default: logged as a warning. */
+  onError?: (err: Error) => void;
+}
+
+export interface MailWatcher {
+  /** Pull now (call it on a push; the CLI wires pushes from the long connection here). */
+  trigger(): Promise<void>;
+  stop(): void;
+  /** Last change id processed. */
+  readonly changeId: number | undefined;
+}
+
+const KIND_BY_CHANGE: Record<string, MailEventKind> = {
+  messageReceivedSummary: 'received',
+  draftSendSummary: 'sent',
+  draftSend: 'sent',
+  mailSendStatusChange: 'send-status',
+  messageSendStatusChange: 'send-status',
+  draftCreateOrUpdate: 'draft',
+  draftCreateOrUpdateSummary: 'draft',
+  draftDelete: 'draft',
+  multiDraftDelete: 'draft',
+  threadModify: 'labels',
+  multiThreadsModify: 'labels',
+  messageModify: 'labels',
+  labelMarkAllRead: 'labels',
+  trashThreads: 'trash',
+  threadTrash: 'trash',
+  messageTrash: 'trash',
+  untrashThreads: 'untrash',
+  threadUntrash: 'untrash',
+  messageUntrash: 'untrash',
+};
+
+/** A change-log entry → MailEvent (ids and labels pulled from whichever change shape it carries). */
+export function toMailEvent(changeLog: Dict): MailEvent {
+  const change = (changeLog.change ?? {}) as Dict;
+  const key = Object.keys(change)[0] ?? '';
+  const v = (change[key] ?? {}) as Dict;
+  // A received message is described by meta, except for mail sent to yourself: there meta is the sent copy and
+  // priorMeta the received one (verified against the mailbox), so priorMeta wins when present
+  const prior = (v.priorMeta ?? {}) as Dict;
+  const meta = (
+    key === 'messageReceivedSummary' && prior.messageBizId
+      ? prior
+      : (v.meta ?? (v.draft as Dict | undefined)?.meta ?? {})
+  ) as Dict;
+  const messageIds = new Set<string>();
+  const threadIds = new Set<string>();
+  const addId = (m: unknown, t: unknown) => {
+    if (m) messageIds.add(str(m));
+    if (t) threadIds.add(str(t));
+  };
+  addId(meta.messageBizId || v.messageBizId || v.messageId, meta.threadBizId || v.threadBizId);
+  for (const id of list<string>(v.messageBizIds)) addId(id, null);
+  for (const sel of list(v.threadSelector)) {
+    addId(null, sel.threadBizId);
+    for (const id of list<string>(sel.messageBizIds)) addId(id, null);
+  }
+  return {
+    changeId: num(changeLog.serverChangeId),
+    kind: KIND_BY_CHANGE[key] ?? 'other',
+    type: str(changeLog.changeType),
+    messageIds: [...messageIds],
+    threadIds: [...threadIds],
+    labels: list<string>(meta.labelIds).map(String),
+    added: list<string>(v.addLabelIds).map(String),
+    removed: list<string>(v.removeLabelIds).map(String),
+    raw: changeLog,
+  };
+}
+
 /** File to attach: bytes plus file name. */
 export interface MailFile {
   name: string;
@@ -540,6 +656,124 @@ export class LarkMail {
     }
     // The server doesn't keep every folder strictly newest-first
     return out.sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
+  }
+
+  // ---- change log ----
+
+  /**
+   * Mailbox changes after changeId, oldest first. When the gap is too large for the server to replay, returns a
+   * single 'resync' event. enrich (default true) adds subject / sender / preview to received and sent mail.
+   */
+  async changesSince(
+    changeId: number,
+    o: { enrich?: boolean } = {},
+  ): Promise<{ events: MailEvent[]; lastChangeId: number }> {
+    const events: MailEvent[] = [];
+    let cursor = changeId;
+    let last = changeId;
+    for (let round = 0; round < 20; round++) {
+      const resp = await this.client.api('mails.MailInitSyncRequest', {
+        lastSyncedCommitId: cursor,
+        shouldReturnChangeLogs: true,
+      });
+      last = Math.max(last, num(resp.lastChangeId));
+      const logs = list(((resp.changeLogResponse ?? {}) as Dict).changeLogs);
+      if (!logs.length) {
+        if (resp.coldStart && last > cursor)
+          events.push({
+            ...toMailEvent({ serverChangeId: last, changeType: 'resync' }),
+            kind: 'resync',
+          });
+        cursor = last;
+        break;
+      }
+      const before = cursor;
+      for (const l of logs.sort((a, b) => num(a.serverChangeId) - num(b.serverChangeId)))
+        if (num(l.serverChangeId) > cursor) {
+          // no_op entries record writes that changed nothing
+          if (str(l.changeType) !== 'no_op') events.push(toMailEvent(l));
+          cursor = num(l.serverChangeId);
+        }
+      // Stop when a round brings nothing new, instead of repeating the same request
+      if (cursor >= last || cursor === before) break;
+    }
+    if (o.enrich ?? true) await this.enrichEvents(events);
+    return { events, lastChangeId: Math.max(cursor, last) };
+  }
+
+  private async enrichEvents(events: MailEvent[]): Promise<void> {
+    const want = events.filter(
+      (e) => (e.kind === 'received' || e.kind === 'sent') && e.messageIds[0],
+    );
+    const ids = [...new Set(want.map((e) => e.messageIds[0] as string))];
+    const byId = new Map<string, Dict>();
+    for (let i = 0; i < ids.length; i += SUMMARY_BATCH) {
+      const resp = await this.client.api('mails.GetMailMessageSummaryRequest', {
+        messageBizIds: ids.slice(i, i + SUMMARY_BATCH),
+      });
+      for (const s of list(resp.messageSummaries)) byId.set(str(s.messageBizId), s);
+    }
+    for (const e of want) {
+      const m = byId.get(e.messageIds[0] as string);
+      if (!m) continue;
+      const msg = toMailMessage(null, m);
+      e.subject = msg.subject;
+      e.from = msg.from.name ? `${msg.from.name} <${msg.from.address}>` : msg.from.address;
+      e.summary = msg.summary;
+    }
+  }
+
+  /**
+   * Follow the mailbox change log: onEvent gets every change in order, once. Pulls on trigger() (wire the long
+   * connection's mail pushes to it) and every pollMs, which also covers changes the server doesn't push to this
+   * device (e.g. ones made by this process). Stop with stop().
+   */
+  async watch(
+    onEvent: (e: MailEvent) => void | Promise<void>,
+    o: MailWatchOptions = {},
+  ): Promise<MailWatcher> {
+    let cursor = o.fromChangeId ?? (await this.syncChangeId());
+    let stopped = false;
+    let running: Promise<void> | null = null;
+    let again = false;
+    const pull = async (): Promise<void> => {
+      if (stopped) return;
+      if (running) {
+        again = true;
+        return running;
+      }
+      running = (async () => {
+        do {
+          again = false;
+          try {
+            const r = await this.changesSince(cursor, { enrich: o.enrich ?? true });
+            for (const e of r.events) {
+              if (stopped) return;
+              await onEvent(e);
+              cursor = Math.max(cursor, e.changeId);
+            }
+            cursor = Math.max(cursor, r.lastChangeId);
+          } catch (err) {
+            if (o.onError) o.onError(err as Error);
+            else logger.warning(`mail change pull failed: ${(err as Error).message}`);
+          }
+        } while (again && !stopped);
+      })().finally(() => {
+        running = null;
+      });
+      return running;
+    };
+    const timer = setInterval(() => void pull(), o.pollMs ?? 30_000);
+    return {
+      trigger: pull,
+      stop: () => {
+        stopped = true;
+        clearInterval(timer);
+      },
+      get changeId() {
+        return cursor;
+      },
+    };
   }
 
   // ---- writes ----
@@ -1035,6 +1269,8 @@ export const MAIL_METHOD_PERMISSIONS: {
   list: 'mail.list',
   resolveTarget: 'mail.labels',
   threadMembers: 'mail.thread',
+  changesSince: 'mail.watch',
+  watch: 'mail.watch',
   markRead: 'mail.read',
   flag: 'mail.flag',
   archive: 'mail.archive',

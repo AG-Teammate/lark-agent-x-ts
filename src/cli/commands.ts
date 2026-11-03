@@ -11,6 +11,7 @@ import {
   htmlToText,
   type MailAddress,
   type MailChangeResult,
+  type MailEvent,
   type MailFile,
   type MailMessage,
   type MailSearchHit,
@@ -1428,7 +1429,11 @@ const tags: Command = {
   },
 };
 
-async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
+async function listenOnce(
+  agentEnabled: boolean,
+  la: LarkAuth,
+  mailEnabled = false,
+): Promise<never> {
   const c = await LarkClient.create(la);
   const st = new Storage();
   if (agentEnabled && !la.userId) {
@@ -1454,6 +1459,8 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
   out(
     `  trigger prefix: ${cfg.triggers.prefix || '(all messages)'}  custom prompt: ${cfg.system_prompt ? 'yes' : 'no'}`,
   );
+  if (mailEnabled)
+    out('  mail: watching mailbox changes (logged as "mail <change id> <kind> ...")');
   out(line);
   const dispatcher = agentEnabled
     ? new AgentDispatcher(await getBackend(undefined, st), (chatId, text, rootId) =>
@@ -1596,8 +1603,17 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
         la.userId,
       );
   };
+  const mailWatcher = mailEnabled
+    ? await c.mail.watch((e) => logger.info(`mail ${fmtMailEvent(e)}`))
+    : undefined;
   await keepListening(c, onMessage, {
     onReaction,
+    ...(mailWatcher
+      ? {
+          onMailChange: () => void mailWatcher.trigger(),
+          onConnected: () => void mailWatcher.trigger(),
+        }
+      : {}),
     missed: (since) =>
       c.missedMessages(since, {
         localPosition: (chatId) => st.lastPosition(chatId),
@@ -1611,7 +1627,14 @@ const listen: Command = {
   name: 'listen',
   help: 'listen for messages continuously',
   access: 'listen',
-  options: [{ name: 'agent', kind: 'flag', help: 'auto-reply with the local coding agent' }],
+  options: [
+    { name: 'agent', kind: 'flag', help: 'auto-reply with the local coding agent' },
+    {
+      name: 'mail',
+      kind: 'flag',
+      help: 'also log Lark Mail changes (new mail, sends, label edits, trash)',
+    },
+  ],
   async run(a) {
     process.on('SIGINT', () => {
       out('\nstopped');
@@ -1619,7 +1642,7 @@ const listen: Command = {
     });
     for (;;) {
       try {
-        await listenOnce(Boolean(a.agent), await interactiveLogin());
+        await listenOnce(Boolean(a.agent), await interactiveLogin(), Boolean(a.mail));
       } catch (e) {
         if (!(e instanceof AuthExpired)) throw e;
         if (!process.stdin.isTTY) {
@@ -1721,10 +1744,22 @@ const MAIL_ACTIONS = [
   'label',
   'archive',
   'trash',
+  'watch',
 ] as const;
 type MailAction = (typeof MAIL_ACTIONS)[number];
 
 const fmtAddress = (a: MailAddress) => (a.name ? `${a.name} <${a.address}>` : a.address);
+const fmtMailEvent = (e: MailEvent) =>
+  [
+    e.changeId,
+    e.kind,
+    e.messageIds.join(','),
+    e.kind === 'received' || e.kind === 'sent'
+      ? `${e.from ?? ''}\t${e.subject ?? ''}`
+      : e.kind === 'labels'
+        ? `${e.added.map((l) => `+${l}`).join(' ')} ${e.removed.map((l) => `-${l}`).join(' ')}`.trim()
+        : e.type,
+  ].join('\t');
 const fmtHit = (h: MailSearchHit) =>
   `${h.messageId}\t${h.threadId}\t${localDatetime(h.createdAt)}\t${h.unread ? 'unread' : 'read'}\t${h.from}\t${h.subject || '(no subject)'}`;
 const fmtSize = (n: number) =>
@@ -1766,7 +1801,7 @@ function mailBody(a: Parsed, words: string[]): { text?: string; html?: string } 
 
 const mailCmd: Command = {
   name: 'mail',
-  help: 'Lark Mail: list/thread/get/search/download, send/reply/forward, read/flag/label/archive/trash, labels',
+  help: 'Lark Mail: list/thread/get/search/download, send/reply/forward, read/flag/label/archive/trash, labels, watch',
   access: (a) => {
     const action = a.action as MailAction;
     if (a.draft && (action === 'send' || action === 'reply' || action === 'forward'))
@@ -1834,6 +1869,12 @@ const mailCmd: Command = {
       kind: 'string',
       default: '.',
       help: 'download: target directory',
+    },
+    {
+      name: 'interval',
+      kind: 'int',
+      default: 30,
+      help: 'watch: seconds between change-log pulls without a push',
     },
     { name: 'limit', kind: 'int', default: 20 },
     { name: 'json', kind: 'flag' },
@@ -2003,6 +2044,29 @@ const mailCmd: Command = {
           await m.deleteDrafts(args);
           out(`deleted ${args.length} draft(s)`);
           return 0;
+        case 'watch': {
+          const c = await client();
+          const w = await c.mail.watch(
+            (e) => {
+              if (json) out(JSON.stringify({ ...e, raw: undefined }));
+              else out(fmtMailEvent(e));
+            },
+            {
+              pollMs: Number(a.interval) * 1000,
+              onError: (e) => err(`mail change pull failed: ${errorText(e)}`),
+            },
+          );
+          process.on('SIGINT', () => {
+            w.stop();
+            process.exit(0);
+          });
+          await keepListening(c, async () => {}, {
+            missed: async () => [],
+            onMailChange: () => void w.trigger(),
+            onConnected: () => void w.trigger(),
+          });
+          return 0;
+        }
         case 'read':
         case 'flag':
         case 'label':

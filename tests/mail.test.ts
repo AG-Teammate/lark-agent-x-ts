@@ -1259,6 +1259,7 @@ describe('mail permissions', () => {
       'mail.get': 'query',
       'mail.search': 'query',
       'mail.download': 'query',
+      'mail.watch': 'query',
       'mail.send': 'outbound',
       'mail.reply': 'outbound',
       'mail.forward': 'outbound',

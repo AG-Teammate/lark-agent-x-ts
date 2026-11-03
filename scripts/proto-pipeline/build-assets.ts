@@ -78,6 +78,8 @@ const CORE_TYPES = [
   'reactions.PushReactions',
   // Scheduled messages embed the send packet in putRequest as the full-definition PutMessageRequest
   'messages.PutMessageRequest',
+  // Lark Mail change-log push decoded by the long connection
+  'mailchanges.MailProcessedChangePushRequest',
 ];
 
 const BUF = join(import.meta.dir, '..', '..', 'node_modules', '.bin', 'buf');

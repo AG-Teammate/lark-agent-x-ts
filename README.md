@@ -40,7 +40,7 @@ Put `dist/lark` on your PATH. `lark --version` prints the version and build comm
 | `lark read <chat_id> <msg_id...>` | Mark messages read (same as viewing them in the client; thread replies are marked per thread) |
 | `lark message-link <chat_id> <msg_id...>` | Generate an official message link (one message links to that message; several produce a combined link) |
 | `lark self-chat` | Print the chat_id of your chat with yourself |
-| `lark listen` | Long-running: receive messages over the persistent connection and store them; after reconnecting, automatically backfills messages missed while disconnected (including thread replies); updates the local store when the other side recalls or edits a message; logs reaction changes |
+| `lark listen` | Long-running: receive messages over the persistent connection and store them (`--mail` also logs Lark Mail changes, see [Mail](#mail)); after reconnecting, automatically backfills messages missed while disconnected (including thread replies); updates the local store when the other side recalls or edits a message; logs reaction changes |
 | `lark listen --agent` (or `bun run agent`) | Long-running: receive messages and auto-reply through a local coding agent |
 | `lark messages <chat_id>` | Read locally stored messages (`--anchor` shows only a thread; an empty string shows only the main chat) |
 | `lark history <chat_id>` | Fetch message history (`--save` stores it; `--since` / `--until` fetch the latest `--count` messages in a time range, e.g. `--since 2h`, `--since 2026-10-01`) |
@@ -66,6 +66,7 @@ Mail is handled **message by message**, like the desktop client: `list` and `sea
 | Action | Description |
 |-------|------|
 | `labels` / `addresses` | Labels and folders with unread counts / the account's sending addresses (default first) |
+| `watch` | Stream mailbox changes in real time (see below) |
 | `list [label]` | Messages under a label or folder, newest first (default `inbox`; `--limit`; `--unread`; `--before <time>` for older mail, e.g. the last row's `createdAt` from `--json`; `--threads` groups by conversation instead; `--json`) |
 | `thread <thread_id>` / `get <message_id...>` | A whole conversation / messages by id, with bodies and attachments (`--html` prints the HTML body, `--json`) |
 | `search <keyword>` | Server-side search, one row per message (`--from`, `--to`, `--subject`, `--label` (label or folder), `--since` / `--until`, `--attachments`, `--unread`, `--limit`, `--json`); trashed mail is only found with `--label trash` |
@@ -80,6 +81,10 @@ Mail is handled **message by message**, like the desktop client: `list` and `sea
 
 All five also accept `--thread` (the ids are thread ids) and `--json` (prints `{messageIds, failed}`).
 
+`watch` streams mailbox changes in real time, one line per change: `change_id`, kind (`received`, `sent`, `send-status`, `draft`, `labels`, `trash`, `untrash`, `resync`, `other`), message ids, then sender and subject (received / sent) or the label edits. `--json` prints one JSON object per line; `--interval <s>` sets the fallback pull interval (default 30).
+
+**Real-time changes.** Like the mail web client, `watch` listens on the long connection for mail change-log pushes and then pulls the mailbox change log from the last change id it has seen, so every change is reported once and in order, including ones made from other devices and by this tool itself (the server doesn't push a device its own changes; the periodic pull covers those). After a disconnect it catches up from the same change id; if the gap is too large for the server to replay, it reports a single `resync` event. `lark listen --mail` logs the same events next to chat messages, and the library exposes them as `client.mail.watch(onEvent)` / `client.mail.changesSince(id)`. A `received` event carries the id of the message in your mailbox (for mail sent to yourself, the received copy, not the sent one), ready for `read`, `trash` and the other actions.
+
 ```bash
 lark mail list --limit 10
 lark mail list --unread
@@ -87,6 +92,7 @@ lark mail trash <message_id> <message_id>
 lark mail send --to someone@example.com --subject "Weekly report" "Hi,\nthe report is attached." --attach report.pdf
 lark mail reply <message_id> "Thanks, looks good." --all
 lark mail search invoice --since 30d --attachments
+lark mail watch --json   # one JSON line per mailbox change, e.g. new mail
 ```
 
 Each action is its own permission item (`mail.list`, `mail.send`, ...); saving a draft (`--draft`) only needs `mail.draft`. See [Command permissions](#command-permissions).
@@ -117,7 +123,7 @@ Each command can be allowed or denied individually or by group, to limit what th
 | Group | Contains |
 |---|---|
 | `local` | Read-only local data: `auth status`, `config`, `chats` (local list), `sessions`, `messages`, `permissions` (viewing) |
-| `query` | Read-only Feishu data: `auth check`, `chats --remote`, `history`, `get`, `thread`, `search`, `search-messages`, `unread`, `members`, `users`, `reactions`, `read-status`, `pins`, `flags`, `tags`, `translate`, `message-link`, `self-chat`, `download`, plus listing with `scheduled` and `shortcut`, and reading with `mail` (`labels`, `addresses`, `list`, `thread`, `get`, `search`, `download`) |
+| `query` | Read-only Feishu data: `auth check`, `chats --remote`, `history`, `get`, `thread`, `search`, `search-messages`, `unread`, `members`, `users`, `reactions`, `read-status`, `pins`, `flags`, `tags`, `translate`, `message-link`, `self-chat`, `download`, plus listing with `scheduled` and `shortcut`, and reading with `mail` (`labels`, `addresses`, `list`, `thread`, `get`, `search`, `download`, `watch`) |
 | `outbound` | Sends new messages: `send`, `send-image`, `send-file`, `schedule`, `forward`, plus cancelling and rescheduling with `scheduled`, and `mail` `send` / `reply` / `forward` / `send-draft` |
 | `modify` | Changes existing messages or state others can see: `recall`, `edit`, `react`, `pin`, `read` |
 | `organize` | Personal organization that only affects you: `flag`, plus pinning and unpinning with `shortcut`, and `mail` `draft` (saving with `--draft`) / `delete-draft` / `read` / `flag` / `label` / `archive` / `trash` |
@@ -179,6 +185,7 @@ const inbox = await client.mail.list('INBOX', { limit: 20, unreadOnly: true }); 
 const conversation = await client.mail.thread(inbox[0].threadId); // messages with text, HTML and attachments; threads() is the grouped view
 await client.mail.send({ to: ['someone@example.com'], subject: 'Hi', text: 'Hello', attachments: [{ name: 'a.pdf', data: readFileSync('a.pdf') }] });
 await client.mail.reply('<message_id>', { text: 'Thanks', all: true }); // also forward, sendDraft, deleteDrafts; { draftOnly: true } saves a draft
+const watcher = await client.mail.watch((e) => { if (e.kind === 'received') notify(e.from, e.subject); }); // pulls the change log; feed pushes in via connectWebsocket's 5th argument (onMailChange) → watcher.trigger()
 const { messageIds, failed } = await client.mail.markRead([inbox[0].messageId]); // also flag, archive, trash, modify (labels); { threads: true } takes thread ids; failed lists messages whose state didn't change
 
 // Permissions: not checked by default (everything allowed). permissions: true uses the same rules as the CLI, or pass a rule set directly

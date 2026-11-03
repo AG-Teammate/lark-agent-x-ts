@@ -66,6 +66,7 @@ export const PERMISSIONS = {
   'mail.get': 'query',
   'mail.search': 'query',
   'mail.download': 'query',
+  'mail.watch': 'query',
 
   send: 'outbound',
   'send-image': 'outbound',

@@ -286,6 +286,8 @@ const GROUP_FIELD_NAME = 1;
 const GROUP_FIELD_DESCRIPTION = 3;
 /** Websocket push: reaction changes (reactions.PushReactions). */
 const PUSH_REACTIONS = 27;
+// Lark Mail change-log push (mailchanges.MailProcessedChangePushRequest); cmd from the mail web client
+const PUSH_MAIL_CHANGE = 3603;
 /** Number of threads to look back at a time in a thread group. */
 const RECENT_THREADS = 20;
 
@@ -301,6 +303,9 @@ async function gatewayReason(res: Response): Promise<string> {
     return '';
   }
 }
+
+/** Receives each Lark Mail change-log entry pushed over the long connection (a hint; LarkMail.watch pulls the full log). */
+export type MailChangeHandler = (changeLog: Dict) => void | Promise<void>;
 
 export interface ClientOptions {
   /**
@@ -395,6 +400,7 @@ export class LarkClient {
     signal?: AbortSignal,
     onOpen?: () => void,
     onReaction?: ReactionHandler,
+    onMailChange?: MailChangeHandler,
   ): Promise<void> {
     const url = await this.buildWsUrl();
     const { openTimeoutMs, heartbeatMs, idleTimeoutMs } = this.wsTiming;
@@ -461,6 +467,17 @@ export class LarkClient {
                   logger.error(`reaction callback error: ${(err as Error).message}`),
                 ),
               );
+            return;
+          }
+          if (packet.cmd === PUSH_MAIL_CHANGE && onMailChange && packet.payload) {
+            const T = larkType('mailchanges.MailProcessedChangePushRequest');
+            const push = toDict(T, fromBinary(T, packet.payload as Uint8Array));
+            const log = (push.changeLog ?? {}) as Dict;
+            chain = chain.then(() =>
+              Promise.resolve(onMailChange(log)).catch((err) =>
+                logger.error(`mail change callback error: ${(err as Error).message}`),
+              ),
+            );
             return;
           }
           if (packet.cmd !== 6) return;

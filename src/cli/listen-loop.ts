@@ -1,5 +1,5 @@
 import { AuthExpired } from '../auth.js';
-import type { LarkClient, ReactionHandler } from '../client.js';
+import type { LarkClient, MailChangeHandler, ReactionHandler } from '../client.js';
 import { getLogger } from '../log.js';
 import type { LarkMessage } from '../proto/decoders.js';
 import { errorText } from './format.js';
@@ -11,6 +11,10 @@ export interface ListenLoopOptions {
   missed: (since: number) => Promise<LarkMessage[]>;
   /** Reaction changes (optional). */
   onReaction?: ReactionHandler;
+  /** Lark Mail change pushes (optional). */
+  onMailChange?: MailChangeHandler;
+  /** Called after every (re)connect, e.g. to catch up on mail changes. */
+  onConnected?: () => void;
   /** Delay before reconnecting after a disconnect; default 10 seconds. */
   retryMs?: number;
   signal?: AbortSignal;
@@ -59,6 +63,7 @@ export async function keepListening(
   let disconnectedAt: number | undefined;
   let pending = Promise.resolve();
   const onOpen = () => {
+    o.onConnected?.();
     if (disconnectedAt === undefined) return;
     const since = disconnectedAt;
     disconnectedAt = undefined;
@@ -66,7 +71,7 @@ export async function keepListening(
   };
   while (!o.signal?.aborted) {
     try {
-      await c.connectWebsocket(enqueue, o.signal, onOpen, o.onReaction);
+      await c.connectWebsocket(enqueue, o.signal, onOpen, o.onReaction, o.onMailChange);
       if (o.signal?.aborted) break;
       logger.warning('WS connection closed, reconnecting');
     } catch (e) {
