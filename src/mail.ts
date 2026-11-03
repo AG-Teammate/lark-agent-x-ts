@@ -93,15 +93,20 @@ export interface MailSearchOptions {
   from?: string[];
   to?: string[];
   subject?: string[];
-  /** Restrict to a label id (e.g. INBOX, SENT). */
+  /** Restrict to a label id (e.g. INBOX, SENT, a user label id). Trashed mail is only found with label TRASH. */
   label?: string;
+  /** Restrict to a folder id (user folders; see labels()). */
+  folder?: string;
   /** Time range (ms). */
   since?: number;
   until?: number;
   hasAttachment?: boolean;
+  /** Only unread messages. */
+  unreadOnly?: boolean;
   limit?: number;
 }
 
+/** One message from a listing or search (no body). */
 export interface MailSearchHit {
   messageId: string;
   threadId: string;
@@ -109,9 +114,23 @@ export interface MailSearchHit {
   summary: string;
   from: string;
   createdAt: number;
+  /** The message's own labels (INBOX, UNREAD, FLAGGED, TRASH, user label ids, ...). */
   labels: string[];
+  unread: boolean;
   hasAttachment: boolean;
-  messageCount: number;
+}
+
+/** How write actions pick their targets: message ids (default), or thread ids expanded to their messages. */
+export interface MailChangeOptions {
+  threads?: boolean;
+}
+
+/** Outcome of a write action, checked by re-reading the messages afterwards. */
+export interface MailChangeResult {
+  /** Messages that now have the requested state. */
+  messageIds: string[];
+  /** Messages that don't, with the reason. */
+  failed: Array<{ messageId: string; reason: string }>;
 }
 
 /** File to attach: bytes plus file name. */
@@ -289,15 +308,45 @@ export class LarkMail {
     return out;
   }
 
-  /** Resolve a label by id or (case-insensitive) name; system names like "inbox" map to their ids. */
-  async resolveLabel(nameOrId: string): Promise<string> {
+  /**
+   * Resolve a label or folder by id or (case-insensitive) name; system names like "inbox" map to their ids.
+   * folder is true for user folders, which listing and search address differently from labels.
+   */
+  async resolveTarget(nameOrId: string): Promise<{ id: string; folder: boolean }> {
     const key = nameOrId.trim();
     const sys = (MAIL_LABELS as Record<string, string>)[key.toLowerCase()];
-    if (sys) return sys;
-    if (/^[A-Z_]+$/.test(key) || /^\d+$/.test(key)) return key;
-    const found = (await this.labels()).find((l) => l.name.toLowerCase() === key.toLowerCase());
-    if (!found) throw new Error(`Unknown mail label: ${nameOrId}`);
-    return found.id;
+    if (sys) return { id: sys, folder: false };
+    if ((Object.values(MAIL_LABELS) as string[]).includes(key)) return { id: key, folder: false };
+    const found = (await this.labels()).find(
+      (l) => l.id === key || l.name.toLowerCase() === key.toLowerCase(),
+    );
+    if (found) return { id: found.id, folder: found.kind === 'folder' };
+    // Other system ids (e.g. READ_RECEIPT_REQUEST) and label ids not in the lists pass through as they are
+    if (/^[A-Z_]+$/.test(key) || /^\d+$/.test(key)) return { id: key, folder: false };
+    throw new Error(`Unknown mail label or folder: ${nameOrId}`);
+  }
+
+  /** Resolve a label by id or name (see resolveTarget); returns the id. */
+  async resolveLabel(nameOrId: string): Promise<string> {
+    return (await this.resolveTarget(nameOrId)).id;
+  }
+
+  /**
+   * Messages under a label or folder, newest first, one entry per message (like the desktop client's list, and
+   * unlike threads(), which groups by conversation and can hide individual copies). until (ms) lists older mail:
+   * pass the last entry's createdAt to page.
+   */
+  async list(
+    labelOrFolder = 'INBOX',
+    o: { limit?: number; until?: number; unreadOnly?: boolean } = {},
+  ): Promise<MailSearchHit[]> {
+    const t = await this.resolveTarget(labelOrFolder);
+    return this.search('', {
+      ...(t.folder ? { folder: t.id } : { label: t.id }),
+      ...(o.until ? { until: o.until } : {}),
+      ...(o.unreadOnly ? { unreadOnly: true } : {}),
+      limit: o.limit ?? 20,
+    });
   }
 
   /**
@@ -393,20 +442,67 @@ export class LarkMail {
     return messageIds.flatMap((id) => (found.has(id) ? [found.get(id) as MailMessage] : []));
   }
 
-  /** A whole conversation, oldest message first, with bodies and attachments (drafts included). */
+  /**
+   * A whole conversation, oldest message first, with bodies and attachments (drafts included). Includes copies the
+   * server's thread listing leaves out (e.g. the received copy of mail sent to yourself); see threadMembers.
+   */
   async thread(threadId: string): Promise<MailMessage[]> {
-    const metas = (await this.threadMetas([threadId])).get(threadId) ?? [];
-    if (!metas.length) throw new Error(`Mail thread not found: ${threadId}`);
-    const msgs = await this.messages(metas.map((m) => str(m.messageBizId)));
+    const ids = (await this.threadMembers([threadId], true)).get(threadId) ?? [];
+    if (!ids.length) throw new Error(`Mail thread not found: ${threadId}`);
+    const msgs = await this.messages(ids);
     return msgs.sort((a, b) => a.createdAt - b.createdAt);
   }
 
-  /** Full-text search across the mailbox (server-side), newest first. */
+  /**
+   * Thread id → all its message ids. The server's thread listing can leave out copies whose labels differ from the
+   * rest of the thread (e.g. the received copy of mail sent to yourself), so the thread's subject is also searched
+   * message by message and hits with the same thread id are added. includeTrash also searches the trash.
+   */
+  async threadMembers(threadIds: string[], includeTrash = false): Promise<Map<string, string[]>> {
+    const metas = await this.threadMetas(threadIds);
+    const out = new Map<string, string[]>();
+    const subjects = new Map<string, string>();
+    const firstIds = new Map<string, string>();
+    for (const id of threadIds) {
+      const ids = (metas.get(id) ?? []).map((m) => str(m.messageBizId));
+      out.set(id, ids);
+      if (ids[0]) firstIds.set(id, ids[0]);
+    }
+    const firsts = [...firstIds.values()];
+    const byMsg = new Map<string, string>();
+    for (let i = 0; i < firsts.length; i += SUMMARY_BATCH) {
+      const resp = await this.client.api('mails.GetMailMessageSummaryRequest', {
+        messageBizIds: firsts.slice(i, i + SUMMARY_BATCH),
+      });
+      for (const x of list(resp.messageSummaries))
+        byMsg.set(str(x.messageBizId), str(((x.content ?? {}) as Dict).subject));
+    }
+    for (const [t, m] of firstIds) subjects.set(t, byMsg.get(m) ?? '');
+    for (const [threadId, subject] of subjects) {
+      const core = subject.replace(/^(\s*(re|fw|fwd|aw|wg)\s*:)+/i, '').trim();
+      if (!core) continue;
+      const hits = [
+        ...(await this.search(core, { limit: 100 })),
+        ...(includeTrash ? await this.search(core, { label: 'TRASH', limit: 100 }) : []),
+      ];
+      const ids = out.get(threadId) as string[];
+      for (const h of hits)
+        if (h.threadId === threadId && !ids.includes(h.messageId)) ids.push(h.messageId);
+    }
+    return out;
+  }
+
+  /**
+   * Message-by-message search (server-side), newest first. An empty keyword lists everything under label/folder.
+   * Trashed mail is only found with label TRASH.
+   */
   async search(keyword: string, o: MailSearchOptions = {}): Promise<MailSearchHit[]> {
     const limit = o.limit ?? 20;
     const out: MailSearchHit[] = [];
     let session = '';
-    while (out.length < limit) {
+    let offset = 0;
+    // unreadOnly filters client-side, so allow extra pages to find enough matches
+    for (let page = 0; page < (o.unreadOnly ? 40 : 20) && out.length < limit; page++) {
       const resp = await this.client.api('mails.MailAdvancedSearchRequest', {
         keyword,
         fromList: o.from ?? [],
@@ -416,27 +512,34 @@ export class LarkMail {
         endDate: o.until ? Math.floor(o.until / 1000) : 0,
         hasAttachment: Boolean(o.hasAttachment),
         label: o.label ?? '',
+        ...(o.folder ? { folder: o.folder, isFolderEnabled: true } : {}),
+        isConversationModeEnable: false,
         searchSession: session,
-        pageSize: Math.min(50, limit - out.length),
-        offset: out.length,
+        pageSize: 50,
+        offset,
       });
-      const page = list(resp.msgSummary);
-      for (const h of page)
-        out.push({
+      const hits = list(resp.msgSummary);
+      offset += hits.length;
+      for (const h of hits) {
+        const labels = list<string>(h.messageLabels ?? h.labels).map(String);
+        const hit: MailSearchHit = {
           messageId: str(h.messageId),
           threadId: str(h.threadId),
-          subject: str(h.subjectSummary),
-          summary: str(h.bodyPlaintextSummary),
+          subject: str(h.subjectSummary).replace(/<\/?[a-z][^>]*>/gi, ''),
+          summary: str(h.bodyPlaintextSummary).replace(/<\/?[a-z][^>]*>/gi, ''),
           from: str(h.from),
-          createdAt: millis(h.lastMessageTimestamp || h.createdTimestamp),
-          labels: list<string>(h.labels).map(String),
+          createdAt: millis(h.createdTimestamp || h.lastMessageTimestamp),
+          labels,
+          unread: labels.includes('UNREAD'),
           hasAttachment: Boolean(h.hasAttachment),
-          messageCount: num(h.messageCount),
-        });
+        };
+        if (!o.unreadOnly || hit.unread) out.push(hit);
+      }
       session = str(resp.searchSession);
-      if (!page.length || !resp.hasMore) break;
+      if (!hits.length || !resp.hasMore) break;
     }
-    return out.slice(0, limit);
+    // The server doesn't keep every folder strictly newest-first
+    return out.sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
   }
 
   // ---- writes ----
@@ -478,57 +581,129 @@ export class LarkMail {
     return log;
   }
 
-  private async selectors(threadIds: string[]): Promise<ThreadSelector[]> {
-    const metas = await this.threadMetas(threadIds);
-    return threadIds.map((id) => {
-      const msgs = metas.get(id);
-      if (!msgs?.length) throw new Error(`Mail thread not found: ${id}`);
-      return { threadBizId: id, messageBizIds: msgs.map((m) => str(m.messageBizId)) };
-    });
+  /**
+   * Thread selectors for the change log, listing exactly the target messages. The server applies a thread-level
+   * change to the listed message ids only, which makes it a precise per-message operation (the message-level change
+   * types are accepted but don't take effect for read state, archive or trash).
+   */
+  private async selectors(ids: string[], o: MailChangeOptions): Promise<ThreadSelector[]> {
+    const byThread = new Map<string, string[]>();
+    if (o.threads) {
+      const members = await this.threadMembers(ids, true);
+      for (const id of ids) {
+        const m = members.get(id) ?? [];
+        if (!m.length) throw new Error(`Mail thread not found: ${id}`);
+        byThread.set(id, m);
+      }
+    } else {
+      const msgs = await this.messages(ids);
+      const missing = ids.filter((id) => !msgs.some((m) => m.messageId === id));
+      if (missing.length) throw new Error(`Mail message not found: ${missing.join(', ')}`);
+      for (const m of msgs)
+        byThread.set(m.threadId, [...(byThread.get(m.threadId) ?? []), m.messageId]);
+    }
+    return [...byThread].map(([threadBizId, messageBizIds]) => ({ threadBizId, messageBizIds }));
   }
 
-  /** Add and/or remove label ids on threads (system ids like FLAGGED, ARCHIVED, or user label ids). */
-  async modifyThreads(
-    threadIds: string[],
-    o: { add?: string[]; remove?: string[] },
-  ): Promise<void> {
-    await this.change({
-      multiThreadsModify: {
-        threadSelector: await this.selectors(threadIds),
-        addLabelIds: o.add ?? [],
-        removeLabelIds: o.remove ?? [],
-        isFromSearch: false,
-      },
-    });
+  /** Submit the changes, then re-read the messages and report which ones reached the expected state. */
+  private async apply(
+    ids: string[],
+    o: MailChangeOptions,
+    build: (sel: ThreadSelector[]) => Dict[],
+    expect: (labels: string[]) => boolean,
+  ): Promise<MailChangeResult> {
+    const sel = await this.selectors(ids, o);
+    for (const ch of build(sel)) await this.change(ch);
+    const targets = sel.flatMap((x) => x.messageBizIds);
+    let pending = targets;
+    const gone = new Set<string>();
+    for (let attempt = 0; attempt < 3 && pending.length; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 1000 * attempt));
+      const now = new Map((await this.messages(pending)).map((m) => [m.messageId, m.labels]));
+      gone.clear();
+      for (const id of pending) if (!now.has(id)) gone.add(id);
+      pending = pending.filter((id) => !now.has(id) || !expect(now.get(id) as string[]));
+    }
+    return {
+      messageIds: targets.filter((id) => !pending.includes(id)),
+      failed: pending.map((messageId) => ({
+        messageId,
+        reason: gone.has(messageId)
+          ? 'message not found after the update'
+          : 'state unchanged after the update',
+      })),
+    };
   }
 
-  /** Mark threads read (or unread with read = false). */
-  async markRead(threadIds: string[], read = true): Promise<void> {
-    for (const s of await this.selectors(threadIds))
-      await this.change({
-        threadModify: {
-          ...s,
-          ...(read ? { removeLabelIds: ['UNREAD'] } : { addLabelIds: ['UNREAD'] }),
+  private labelChange(add: string[], remove: string[]) {
+    return (sel: ThreadSelector[]) => [
+      {
+        multiThreadsModify: {
+          threadSelector: sel,
+          addLabelIds: add,
+          removeLabelIds: remove,
+          isFromSearch: true,
         },
-      });
+      },
+    ];
   }
 
-  flag(threadIds: string[], flagged = true): Promise<void> {
-    return this.modifyThreads(threadIds, flagged ? { add: ['FLAGGED'] } : { remove: ['FLAGGED'] });
+  /** Add and/or remove label ids (system ids like FLAGGED, or user label ids) on messages (or whole threads). */
+  modify(
+    ids: string[],
+    l: { add?: string[]; remove?: string[] },
+    o: MailChangeOptions = {},
+  ): Promise<MailChangeResult> {
+    const add = l.add ?? [];
+    const remove = l.remove ?? [];
+    return this.apply(
+      ids,
+      o,
+      this.labelChange(add, remove),
+      (labels) => add.every((x) => labels.includes(x)) && !remove.some((x) => labels.includes(x)),
+    );
   }
 
-  /** Archive threads (they leave the inbox), or move them back to the inbox with archived = false. */
-  archive(threadIds: string[], archived = true): Promise<void> {
-    return this.modifyThreads(threadIds, archived ? { add: ['ARCHIVED'] } : { add: ['INBOX'] });
+  /** Mark messages (or whole threads) read, or unread with read = false. */
+  markRead(ids: string[], read = true, o: MailChangeOptions = {}): Promise<MailChangeResult> {
+    return this.apply(
+      ids,
+      o,
+      (sel) =>
+        sel.map((s) => ({
+          threadModify: {
+            ...s,
+            ...(read ? { removeLabelIds: ['UNREAD'] } : { addLabelIds: ['UNREAD'] }),
+          },
+        })),
+      (labels) => labels.includes('UNREAD') !== read,
+    );
   }
 
-  /** Move threads to the trash, or restore them with trashed = false. */
-  async trash(threadIds: string[], trashed = true): Promise<void> {
-    const threadSelector = await this.selectors(threadIds);
-    await this.change(
-      trashed
-        ? { trashThreads: { threadSelector, isFromSearch: false } }
-        : { untrashThreads: { threadSelector } },
+  flag(ids: string[], flagged = true, o: MailChangeOptions = {}): Promise<MailChangeResult> {
+    return this.modify(ids, flagged ? { add: ['FLAGGED'] } : { remove: ['FLAGGED'] }, o);
+  }
+
+  /** Archive (they leave the inbox), or move back to the inbox with archived = false. */
+  archive(ids: string[], archived = true, o: MailChangeOptions = {}): Promise<MailChangeResult> {
+    return this.apply(ids, o, this.labelChange([archived ? 'ARCHIVED' : 'INBOX'], []), (labels) =>
+      archived
+        ? labels.includes('ARCHIVED') && !labels.includes('INBOX')
+        : labels.includes('INBOX'),
+    );
+  }
+
+  /** Move to the trash, or restore with trashed = false. */
+  trash(ids: string[], trashed = true, o: MailChangeOptions = {}): Promise<MailChangeResult> {
+    return this.apply(
+      ids,
+      o,
+      (sel) => [
+        trashed
+          ? { trashThreads: { threadSelector: sel, isFromSearch: true } }
+          : { untrashThreads: { threadSelector: sel } },
+      ],
+      (labels) => labels.includes('TRASH') === trashed,
     );
   }
 
@@ -856,7 +1031,10 @@ export const MAIL_METHOD_PERMISSIONS: {
   search: 'mail.search',
   downloadAttachment: 'mail.download',
   uploadAttachment: 'mail.draft',
-  modifyThreads: 'mail.label',
+  modify: 'mail.label',
+  list: 'mail.list',
+  resolveTarget: 'mail.labels',
+  threadMembers: 'mail.thread',
   markRead: 'mail.read',
   flag: 'mail.flag',
   archive: 'mail.archive',

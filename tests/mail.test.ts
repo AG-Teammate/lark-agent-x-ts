@@ -26,6 +26,7 @@ const T2 = '7000000000000000002';
 const M1 = '7000000000000000011';
 const M2 = '7000000000000000012';
 const M3 = '7000000000000000013';
+const M4 = '7000000000000000014';
 
 type Handler = (data: Dict) => Dict | Promise<Dict>;
 
@@ -291,11 +292,19 @@ describe('mail reads', () => {
     expect(sizes).toEqual([30, 5]);
   });
 
-  test('thread(): full messages oldest first', async () => {
+  test('thread(): full messages oldest first, including copies found by subject search', async () => {
     const c = newClient();
-    fakeApi(c, {
-      'mails.GetThreadMetaByThreadIDsRequest': () => ({
-        metas: [{ threadBizId: T1, messages: [{ messageBizId: M2 }, { messageBizId: M1 }] }],
+    const calls = fakeApi(c, {
+      'mails.GetThreadMetaByThreadIDsRequest': (d) => ({
+        metas: (d.threadBizIds as string[]).includes(T1)
+          ? [{ threadBizId: T1, messages: [{ messageBizId: M2 }, { messageBizId: M1 }] }]
+          : [],
+      }),
+      'mails.GetMailMessageSummaryRequest': () => ({
+        messageSummaries: [{ messageBizId: M2, content: { subject: 'Re: a' } }],
+      }),
+      'mails.MailAdvancedSearchRequest': (d) => ({
+        msgSummary: d.label === 'TRASH' ? [{ messageId: M4, threadId: T1 }] : [],
       }),
       'mails.GetMailMessageFullByMessageIDsRequest': () => ({
         messages: [
@@ -307,34 +316,369 @@ describe('mail reads', () => {
             { messageBizId: M2, threadBizId: T1, createdTime: { unit: 2, value: 2 } },
             { subject: 'Re: a' },
           ),
+          full(
+            { messageBizId: M4, threadBizId: T1, createdTime: { unit: 2, value: 3 } },
+            { subject: 'Re: a', bodyPlaintext: 'trashed copy' },
+          ),
         ],
       }),
     });
     expect((await c.mail.thread(T1)).map((m) => [m.messageId, m.text])).toEqual([
       [M1, 'x'],
       [M2, ''],
+      [M4, 'trashed copy'],
     ]);
-    await expect(c.mail.thread(T2)).rejects.toThrow('Mail thread not found');
+    // thread() includes the trash
+    expect(
+      calls.filter(([t]) => t === 'mails.MailAdvancedSearchRequest').map(([, d]) => d.label),
+    ).toEqual(['', 'TRASH']);
+    await expect(c.mail.thread(T2)).rejects.toThrow(`Mail thread not found: ${T2}`);
+  });
+
+  test('threadMembers(): adds subject-search hits from the same thread only, Re:/Fw: stripped', async () => {
+    const c = newClient();
+    const calls = fakeApi(c, {
+      'mails.GetThreadMetaByThreadIDsRequest': () => ({
+        metas: [
+          { threadBizId: T1, messages: [{ messageBizId: M1 }] },
+          { threadBizId: T2, messages: [{ messageBizId: M3 }] },
+        ],
+      }),
+      'mails.GetMailMessageSummaryRequest': () => {
+        return {
+          messageSummaries: [
+            { messageBizId: M1, content: { subject: 'Re: FW:  Project update' } },
+            // Nothing left after stripping: no search for this thread
+            { messageBizId: M3, content: { subject: 'Re:' } },
+          ],
+        };
+      },
+      'mails.MailAdvancedSearchRequest': (d) => ({
+        msgSummary:
+          d.label === 'TRASH'
+            ? [{ messageId: M4, threadId: T1 }]
+            : [
+                { messageId: M1, threadId: T1 },
+                { messageId: M2, threadId: T1 },
+                // Same subject in another conversation: ignored
+                { messageId: '7000000000000000015', threadId: T2 },
+              ],
+      }),
+    });
+    const members = await c.mail.threadMembers([T1, T2]);
+    expect([...members]).toEqual([
+      [T1, [M1, M2]],
+      [T2, [M3]],
+    ]);
+    const searches = calls
+      .filter(([t]) => t === 'mails.MailAdvancedSearchRequest')
+      .map(([, d]) => [d.keyword, d.label]);
+    expect(searches).toEqual([['Project update', '']]);
+    // One batched summary request with the first message of each thread
+    expect(
+      calls
+        .filter(([t]) => t === 'mails.GetMailMessageSummaryRequest')
+        .map(([, d]) => d.messageBizIds),
+    ).toEqual([[M1, M3]]);
+
+    calls.length = 0;
+    expect((await c.mail.threadMembers([T1], true)).get(T1)).toEqual([M1, M2, M4]);
+    expect(
+      calls.filter(([t]) => t === 'mails.MailAdvancedSearchRequest').map(([, d]) => d.label),
+    ).toEqual(['', 'TRASH']);
   });
 });
 
-describe('mail change log', () => {
-  const threadMetas: Handler = (d) => ({
-    metas: (d.threadBizIds as string[]).map((id) => ({
-      threadBizId: id,
-      messages: [{ messageBizId: `${id}1` }, { messageBizId: `${id}2` }],
-    })),
+describe('mail search and listing', () => {
+  const hit = (id: string, over: Dict = {}): Dict => ({
+    messageId: id,
+    threadId: T1,
+    subjectSummary: `subject ${id.slice(-2)}`,
+    bodyPlaintextSummary: 'summary',
+    from: PEER,
+    createdTimestamp: { unit: 2, value: Number(id.slice(-2)) * 1000 },
+    messageLabels: ['INBOX'],
+    ...over,
   });
+
+  test('search(): message mode, pages with session and offset, maps and sorts hits', async () => {
+    const c = newClient();
+    const pages: Dict[] = [
+      {
+        hasMore: true,
+        searchSession: 'session-1',
+        msgSummary: [
+          hit(M1, {
+            subjectSummary: '<em>Weekly</em> report',
+            bodyPlaintextSummary: 'see <b>attached</b> <span class="hl">notes</span>',
+            messageLabels: ['INBOX', 'UNREAD'],
+            hasAttachment: true,
+          }),
+          hit(M3, { messageLabels: undefined, labels: ['SENT'] }),
+        ],
+      },
+      { hasMore: false, searchSession: 'session-1', msgSummary: [hit(M2)] },
+    ];
+    const calls = fakeApi(c, { 'mails.MailAdvancedSearchRequest': () => pages.shift() as Dict });
+    const got = await c.mail.search('report', {
+      label: 'INBOX',
+      from: [PEER],
+      since: 1_790_000_000_500,
+      until: 1_790_100_000_900,
+      limit: 10,
+    });
+    const reqs = calls.map(([, d]) => d);
+    expect(reqs).toHaveLength(2);
+    expect(reqs[0]).toMatchObject({
+      keyword: 'report',
+      fromList: [PEER],
+      label: 'INBOX',
+      startDate: 1_790_000_000,
+      endDate: 1_790_100_000,
+      isConversationModeEnable: false,
+      pageSize: 50,
+      searchSession: '',
+      offset: 0,
+    });
+    expect(reqs[0]).not.toHaveProperty('folder');
+    expect(reqs[0]).not.toHaveProperty('isFolderEnabled');
+    expect(reqs[1]).toMatchObject({ searchSession: 'session-1', offset: 2 });
+    // Newest first by createdAt
+    expect(got.map((h) => h.messageId)).toEqual([M3, M2, M1]);
+    expect(got[2]).toEqual({
+      messageId: M1,
+      threadId: T1,
+      subject: 'Weekly report',
+      summary: 'see attached notes',
+      from: PEER,
+      createdAt: 11_000,
+      labels: ['INBOX', 'UNREAD'],
+      unread: true,
+      hasAttachment: true,
+    });
+    expect(got[0]).toMatchObject({ labels: ['SENT'], unread: false, hasAttachment: false });
+  });
+
+  test('search(): results are cut to limit; no time range sends zero dates', async () => {
+    const c = newClient();
+    const calls = fakeApi(c, {
+      'mails.MailAdvancedSearchRequest': () => ({
+        hasMore: true,
+        msgSummary: [hit(M1), hit(M3), hit(M2)],
+      }),
+    });
+    const got = await c.mail.search('', { limit: 2 });
+    expect(got.map((h) => h.messageId)).toEqual([M3, M2]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[1]).toMatchObject({ keyword: '', label: '', startDate: 0, endDate: 0 });
+  });
+
+  test('search(): folder sends folder + isFolderEnabled instead of a label', async () => {
+    const c = newClient();
+    const calls = fakeApi(c, { 'mails.MailAdvancedSearchRequest': () => ({ msgSummary: [] }) });
+    expect(await c.mail.search('', { folder: '7300000000000000002' })).toEqual([]);
+    expect(calls[0]?.[1]).toMatchObject({
+      folder: '7300000000000000002',
+      isFolderEnabled: true,
+      label: '',
+    });
+  });
+
+  test('search(): unreadOnly filters client-side and keeps paging until enough matches', async () => {
+    const c = newClient();
+    const pages: Dict[] = [
+      { hasMore: true, msgSummary: [hit(M1), hit(M2, { messageLabels: ['UNREAD'] }), hit(M3)] },
+      { hasMore: true, msgSummary: [hit(M4, { messageLabels: ['INBOX', 'UNREAD'] })] },
+      { hasMore: true, msgSummary: [hit('7000000000000000019')] },
+    ];
+    const calls = fakeApi(c, { 'mails.MailAdvancedSearchRequest': () => pages.shift() as Dict });
+    const got = await c.mail.search('', { unreadOnly: true, limit: 2 });
+    expect(got.map((h) => h.messageId)).toEqual([M4, M2]);
+    expect(got.every((h) => h.unread)).toBe(true);
+    expect(calls).toHaveLength(2);
+  });
+
+  const labelList: Handler = () => ({
+    coldStart: {
+      mailUnreadCount: { INBOX: '3', '7300000000000000001': 1 },
+      labelList: {
+        systemLabels: [{ id: 'INBOX', name: 'Inbox', totalCount: '10' }],
+        userLabels: [{ id: '7300000000000000001', name: 'Project team' }],
+        userFolders: [{ id: '7300000000000000002', nodeName: 'Receipts' }],
+      },
+    },
+  });
+
+  test('labels(): system, user labels and folders with counts', async () => {
+    const c = newClient();
+    fakeApi(c, { 'mails.MailInitSyncRequest': labelList });
+    expect(await c.mail.labels()).toEqual([
+      { id: 'INBOX', name: 'Inbox', kind: 'system', unread: 3, total: 10 },
+      { id: '7300000000000000001', name: 'Project team', kind: 'label', unread: 1, total: 0 },
+      { id: '7300000000000000002', name: 'Receipts', kind: 'folder', unread: 0, total: 0 },
+    ]);
+  });
+
+  test('resolveTarget(): system names, user labels and folders by name or id; unknown names throw', async () => {
+    const c = newClient();
+    const calls = fakeApi(c, { 'mails.MailInitSyncRequest': labelList });
+    expect(await c.mail.resolveTarget('inbox')).toEqual({ id: 'INBOX', folder: false });
+    expect(await c.mail.resolveTarget(' Trash ')).toEqual({ id: 'TRASH', folder: false });
+    expect(await c.mail.resolveTarget('FLAGGED')).toEqual({ id: 'FLAGGED', folder: false });
+    // System names never need the label list
+    expect(calls).toHaveLength(0);
+    expect(await c.mail.resolveTarget('project TEAM')).toEqual({
+      id: '7300000000000000001',
+      folder: false,
+    });
+    expect(await c.mail.resolveTarget('receipts')).toEqual({
+      id: '7300000000000000002',
+      folder: true,
+    });
+    expect(await c.mail.resolveTarget('7300000000000000002')).toEqual({
+      id: '7300000000000000002',
+      folder: true,
+    });
+    // An unknown numeric id is passed through as a label id
+    expect(await c.mail.resolveTarget('7300000000000000009')).toEqual({
+      id: '7300000000000000009',
+      folder: false,
+    });
+    await expect(c.mail.resolveTarget('No such label')).rejects.toThrow(
+      'Unknown mail label or folder: No such label',
+    );
+    expect(await c.mail.resolveLabel('Receipts')).toBe('7300000000000000002');
+  });
+
+  test('list(): searches everything under a label or folder', async () => {
+    const c = newClient();
+    const calls = fakeApi(c, {
+      'mails.MailInitSyncRequest': labelList,
+      'mails.MailAdvancedSearchRequest': () => ({
+        msgSummary: [hit(M1, { messageLabels: ['INBOX', 'UNREAD'] }), hit(M2)],
+      }),
+    });
+    const searches = () =>
+      calls.filter(([t]) => t === 'mails.MailAdvancedSearchRequest').map(([, d]) => d);
+
+    expect((await c.mail.list()).map((h) => h.messageId)).toEqual([M2, M1]);
+    expect(searches()[0]).toMatchObject({ keyword: '', label: 'INBOX', endDate: 0 });
+    expect(searches()[0]).not.toHaveProperty('folder');
+
+    calls.length = 0;
+    const got = await c.mail.list('Receipts', {
+      limit: 5,
+      until: 1_790_000_000_000,
+      unreadOnly: true,
+    });
+    expect(got.map((h) => h.messageId)).toEqual([M1]);
+    expect(searches()[0]).toMatchObject({
+      keyword: '',
+      label: '',
+      folder: '7300000000000000002',
+      isFolderEnabled: true,
+      endDate: 1_790_000_000,
+    });
+
+    calls.length = 0;
+    await c.mail.list('Project team');
+    expect(searches()[0]).toMatchObject({ label: '7300000000000000001' });
+    expect(searches()[0]).not.toHaveProperty('folder');
+  });
+});
+
+/**
+ * Fake mailbox: message id → thread and labels. Label changes from the change log are applied to the listed message
+ * ids right away (so the re-read after a write sees the new state), except for ids in `stuck`.
+ */
+function mailbox(init: Record<string, [thread: string, labels: string[]]>, stuck: string[] = []) {
+  const state = new Map(
+    Object.entries(init).map(([id, [thread, labels]]) => [id, { thread, labels: [...labels] }]),
+  );
+  const log = changeLog();
+  const edit = (sel: unknown, add: unknown, remove: unknown) => {
+    for (const s of sel as Dict[])
+      for (const id of s.messageBizIds as string[]) {
+        const m = state.get(id);
+        if (!m || stuck.includes(id)) continue;
+        const rm = (remove ?? []) as string[];
+        m.labels = [
+          ...new Set([...m.labels.filter((l) => !rm.includes(l)), ...((add ?? []) as string[])]),
+        ];
+      }
+  };
+  const handlers: Record<string, Handler> = {
+    'mails.MailInitSyncRequest': () => ({ lastChangeId: '1' }),
+    'mails.GetMailMessageFullByMessageIDsRequest': (d) => ({
+      messages: (d.messageBizIds as string[]).flatMap((id) => {
+        const m = state.get(id);
+        return m
+          ? [full({ messageBizId: id, threadBizId: m.thread, labelIds: [...m.labels] }, {})]
+          : [];
+      }),
+    }),
+    'mailchanges.MailAddChangeRequest': (d) => {
+      const ch = d.change as Dict;
+      const tm = ch.threadModify as Dict | undefined;
+      if (tm) edit([tm], tm.addLabelIds, tm.removeLabelIds);
+      const mm = ch.multiThreadsModify as Dict | undefined;
+      if (mm) {
+        const add = mm.addLabelIds as string[];
+        // Like the server: archiving leaves the inbox, moving to the inbox leaves the archive
+        const implied = add.includes('ARCHIVED')
+          ? ['INBOX']
+          : add.includes('INBOX')
+            ? ['ARCHIVED']
+            : [];
+        edit(mm.threadSelector, add, [...(mm.removeLabelIds as string[]), ...implied]);
+      }
+      if (ch.trashThreads) edit((ch.trashThreads as Dict).threadSelector, ['TRASH'], []);
+      if (ch.untrashThreads) edit((ch.untrashThreads as Dict).threadSelector, [], ['TRASH']);
+      return log(d);
+    },
+  };
+  return { state, handlers };
+}
+
+/** Run timers immediately and record their delays (the write verification waits between re-reads). */
+function instantTimers() {
+  const delays: number[] = [];
+  const spy = spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
+    delays.push(ms ?? 0);
+    fn();
+    return 0;
+  }) as unknown as typeof setTimeout);
+  return { delays, restore: () => spy.mockRestore() };
+}
+
+describe('mail writes', () => {
+  const L1 = '7300000000000000001';
+  // M1 and M2 in thread T1, M3 in T2; M4 is another message of T1 that is never targeted
+  const box = (stuck: string[] = []) =>
+    mailbox(
+      {
+        [M1]: [T1, ['INBOX', 'UNREAD']],
+        [M2]: [T1, ['INBOX', 'UNREAD']],
+        [M3]: [T2, ['INBOX', 'UNREAD']],
+        [M4]: [T1, ['INBOX', 'UNREAD']],
+      },
+      stuck,
+    );
+  let timers: ReturnType<typeof instantTimers>;
+  beforeEach(() => {
+    timers = instantTimers();
+  });
+  afterEach(() => timers.restore());
 
   test('the first change syncs, later changes carry the previous serverChangeId', async () => {
     const c = newClient();
+    const { handlers } = box();
     const calls = fakeApi(c, {
+      ...handlers,
       'mails.MailInitSyncRequest': () => ({ lastChangeId: '42' }),
-      'mails.GetThreadMetaByThreadIDsRequest': threadMetas,
-      'mailchanges.MailAddChangeRequest': changeLog(100),
     });
-    await c.mail.flag([T1]);
-    await c.mail.flag([T1], false);
+    await c.mail.flag([M1]);
+    await c.mail.flag([M1], false);
     expect(calls.filter(([t]) => t === 'mails.MailInitSyncRequest')).toHaveLength(1);
     const sent = changes(calls);
     expect(sent.map((d) => (d.meta as Dict).lastSyncedServerChangeId)).toEqual([42, 101]);
@@ -347,20 +691,22 @@ describe('mail change log', () => {
     let syncs = 0;
     let failures = 1;
     const outOfSync = () => new HttpError(400, 'Bad Request', 'gateway', 'user inbox out of sync');
+    const { handlers } = box();
+    const apply = handlers['mailchanges.MailAddChangeRequest'] as Handler;
     const calls = fakeApi(c, {
+      ...handlers,
       'mails.MailInitSyncRequest': () => ({ lastChangeId: String(10 + syncs++) }),
-      'mails.GetThreadMetaByThreadIDsRequest': threadMetas,
       'mailchanges.MailAddChangeRequest': (d) => {
         if (failures-- > 0) throw outOfSync();
-        return changeLog(200)(d);
+        return apply(d);
       },
     });
-    await c.mail.archive([T1]);
+    expect(await c.mail.archive([M1])).toEqual({ messageIds: [M1], failed: [] });
     expect(changes(calls).map((d) => (d.meta as Dict).lastSyncedServerChangeId)).toEqual([10, 11]);
 
     failures = Number.POSITIVE_INFINITY;
     calls.length = 0;
-    const err = await c.mail.archive([T1]).catch((e) => e);
+    const err = await c.mail.archive([M1]).catch((e) => e);
     expect(err).toBeInstanceOf(HttpError);
     expect((err as HttpError).reason).toContain('out of sync');
     expect(changes(calls)).toHaveLength(2);
@@ -373,63 +719,183 @@ describe('mail change log', () => {
       throw new HttpError(500, 'Server Error', 'gateway', 'boom');
     };
     const calls = fakeApi(c, {
-      'mails.MailInitSyncRequest': () => ({ lastChangeId: '1' }),
-      'mails.GetThreadMetaByThreadIDsRequest': threadMetas,
+      ...box().handlers,
       'mailchanges.MailAddChangeRequest': () => reply(),
     });
-    await expect(c.mail.flag([T1])).rejects.toBeInstanceOf(HttpError);
+    await expect(c.mail.flag([M1])).rejects.toBeInstanceOf(HttpError);
     expect(changes(calls)).toHaveLength(1);
     reply = () => ({});
-    await expect(c.mail.flag([T1])).rejects.toThrow('Mail change rejected');
+    await expect(c.mail.flag([M1])).rejects.toThrow('Mail change rejected');
   });
 
-  test('markRead / flag / archive / label / trash build the right changes with all message ids', async () => {
+  test('changes list exactly the given messages, grouped into one selector per thread', async () => {
     const c = newClient();
-    const calls = fakeApi(c, {
-      'mails.MailInitSyncRequest': () => ({ lastChangeId: '1' }),
-      'mails.GetThreadMetaByThreadIDsRequest': threadMetas,
-      'mailchanges.MailAddChangeRequest': changeLog(),
-    });
-    const sel = (id: string) => ({ threadBizId: id, messageBizIds: [`${id}1`, `${id}2`] });
+    const calls = fakeApi(c, box().handlers);
+    const sel = [
+      { threadBizId: T1, messageBizIds: [M1, M2] },
+      { threadBizId: T2, messageBizIds: [M3] },
+    ];
     const multi = (add: string[], remove: string[]) => ({
       multiThreadsModify: {
-        threadSelector: [sel(T1), sel(T2)],
+        threadSelector: sel,
         addLabelIds: add,
         removeLabelIds: remove,
-        isFromSearch: false,
+        isFromSearch: true,
       },
     });
+    const ids = [M1, M3, M2];
 
-    await c.mail.markRead([T1, T2]);
-    await c.mail.markRead([T1], false);
-    await c.mail.flag([T1, T2]);
-    await c.mail.flag([T1, T2], false);
-    await c.mail.archive([T1, T2]);
-    await c.mail.archive([T1, T2], false);
-    await c.mail.modifyThreads([T1, T2], { add: ['7300000000000000001'], remove: ['INBOX'] });
-    await c.mail.trash([T1, T2]);
-    await c.mail.trash([T1, T2], false);
+    await c.mail.markRead(ids);
+    await c.mail.markRead([M1], false);
+    await c.mail.flag(ids);
+    await c.mail.flag(ids, false);
+    await c.mail.archive(ids);
+    await c.mail.archive(ids, false);
+    await c.mail.modify(ids, { add: [L1], remove: ['INBOX'] });
+    await c.mail.trash(ids);
+    await c.mail.trash(ids, false);
 
     expect(changes(calls).map((d) => d.change)).toEqual([
-      { threadModify: { ...sel(T1), removeLabelIds: ['UNREAD'] } },
-      { threadModify: { ...sel(T2), removeLabelIds: ['UNREAD'] } },
-      { threadModify: { ...sel(T1), addLabelIds: ['UNREAD'] } },
+      { threadModify: { ...sel[0], removeLabelIds: ['UNREAD'] } },
+      { threadModify: { ...sel[1], removeLabelIds: ['UNREAD'] } },
+      { threadModify: { threadBizId: T1, messageBizIds: [M1], addLabelIds: ['UNREAD'] } },
       multi(['FLAGGED'], []),
       multi([], ['FLAGGED']),
       multi(['ARCHIVED'], []),
       multi(['INBOX'], []),
-      multi(['7300000000000000001'], ['INBOX']),
-      { trashThreads: { threadSelector: [sel(T1), sel(T2)], isFromSearch: false } },
-      { untrashThreads: { threadSelector: [sel(T1), sel(T2)] } },
+      multi([L1], ['INBOX']),
+      { trashThreads: { threadSelector: sel, isFromSearch: true } },
+      { untrashThreads: { threadSelector: sel } },
     ]);
   });
 
-  test('an unknown thread is rejected before any change is sent', async () => {
+  test('success: the result lists every message and nothing waits when the state is already there', async () => {
     const c = newClient();
-    const calls = fakeApi(c, {
-      'mails.GetThreadMetaByThreadIDsRequest': () => ({ metas: [] }),
+    const { state, handlers } = box();
+    const calls = fakeApi(c, handlers);
+    expect(await c.mail.markRead([M1, M2, M3])).toEqual({ messageIds: [M1, M2, M3], failed: [] });
+    expect(state.get(M1)?.labels).toEqual(['INBOX']);
+    // The untargeted message of the same thread is left alone
+    expect(state.get(M4)?.labels).toEqual(['INBOX', 'UNREAD']);
+    expect(timers.delays).toEqual([]);
+    // One read to build the selectors, one to verify
+    expect(calls.filter(([t]) => t === 'mails.GetMailMessageFullByMessageIDsRequest')).toHaveLength(
+      2,
+    );
+  });
+
+  test('a message that keeps its old state is reported as failed after retries', async () => {
+    const c = newClient();
+    const calls = fakeApi(c, box([M2]).handlers);
+    expect(await c.mail.flag([M1, M2, M3])).toEqual({
+      messageIds: [M1, M3],
+      failed: [{ messageId: M2, reason: 'state unchanged after the update' }],
     });
-    await expect(c.mail.flag([T1])).rejects.toThrow(`Mail thread not found: ${T1}`);
+    expect(timers.delays).toEqual([1000, 2000]);
+    const reads = calls
+      .filter(([t]) => t === 'mails.GetMailMessageFullByMessageIDsRequest')
+      .map(([, d]) => d.messageBizIds);
+    // Retries only re-read what is still pending
+    expect(reads).toEqual([[M1, M2, M3], [M1, M2, M3], [M2], [M2]]);
+  });
+
+  test('each action checks for its own expected state', async () => {
+    // The fake applies nothing, so the initial labels are what the verification sees:
+    // M1 starts in the expected state, M3 doesn't
+    const cases: [string, (c: LarkClient) => Promise<unknown>, string[], string[]][] = [
+      ['read', (c) => c.mail.markRead([M1, M3]), ['INBOX'], ['INBOX', 'UNREAD']],
+      ['unread', (c) => c.mail.markRead([M1, M3], false), ['UNREAD'], ['INBOX']],
+      ['flag', (c) => c.mail.flag([M1, M3]), ['FLAGGED'], ['INBOX']],
+      ['unflag', (c) => c.mail.flag([M1, M3], false), ['INBOX'], ['FLAGGED']],
+      ['archive', (c) => c.mail.archive([M1, M3]), ['ARCHIVED'], ['ARCHIVED', 'INBOX']],
+      ['archive (still inbox)', (c) => c.mail.archive([M1, M3]), ['ARCHIVED'], ['INBOX']],
+      ['unarchive', (c) => c.mail.archive([M1, M3], false), ['INBOX', 'ARCHIVED'], ['ARCHIVED']],
+      ['trash', (c) => c.mail.trash([M1, M3]), ['TRASH'], ['INBOX']],
+      ['untrash', (c) => c.mail.trash([M1, M3], false), ['INBOX'], ['TRASH', 'INBOX']],
+      [
+        'modify (add missing)',
+        (c) => c.mail.modify([M1, M3], { add: [L1], remove: ['INBOX'] }),
+        [L1],
+        ['ARCHIVED'],
+      ],
+      [
+        'modify (remove left)',
+        (c) => c.mail.modify([M1, M3], { add: [L1], remove: ['INBOX'] }),
+        [L1, 'ARCHIVED'],
+        [L1, 'INBOX'],
+      ],
+    ];
+    for (const [name, run, good, bad] of cases) {
+      const c = newClient();
+      fakeApi(c, mailbox({ [M1]: [T1, good], [M3]: [T2, bad] }, [M1, M3]).handlers);
+      expect([name, await run(c)]).toEqual([
+        name,
+        {
+          messageIds: [M1],
+          failed: [{ messageId: M3, reason: 'state unchanged after the update' }],
+        },
+      ]);
+    }
+  });
+
+  test('an unknown message id is rejected before any change is sent', async () => {
+    const c = newClient();
+    const calls = fakeApi(c, box().handlers);
+    const missing = '7000000000000000099';
+    await expect(c.mail.flag([M1, missing])).rejects.toThrow(`Mail message not found: ${missing}`);
+    await expect(c.mail.markRead([missing])).rejects.toThrow('Mail message not found');
+    expect(changes(calls)).toHaveLength(0);
+  });
+
+  test('{threads: true}: thread ids expand to all their messages, including search-found copies', async () => {
+    const c = newClient();
+    const { state, handlers } = box();
+    const calls = fakeApi(c, {
+      ...handlers,
+      'mails.GetThreadMetaByThreadIDsRequest': (d) => ({
+        metas: (d.threadBizIds as string[]).flatMap((id) =>
+          id === T1
+            ? [{ threadBizId: T1, messages: [{ messageBizId: M1 }, { messageBizId: M2 }] }]
+            : [],
+        ),
+      }),
+      'mails.GetMailMessageSummaryRequest': () => ({
+        messageSummaries: [{ messageBizId: M1, content: { subject: 'Fw: Project update' } }],
+      }),
+      'mails.MailAdvancedSearchRequest': (d) => ({
+        msgSummary:
+          d.label === 'TRASH'
+            ? []
+            : [
+                { messageId: M4, threadId: T1 },
+                { messageId: M3, threadId: T2 },
+              ],
+      }),
+    });
+    expect(await c.mail.archive([T1], true, { threads: true })).toEqual({
+      messageIds: [M1, M2, M4],
+      failed: [],
+    });
+    expect(changes(calls).map((d) => d.change)).toEqual([
+      {
+        multiThreadsModify: {
+          threadSelector: [{ threadBizId: T1, messageBizIds: [M1, M2, M4] }],
+          addLabelIds: ['ARCHIVED'],
+          removeLabelIds: [],
+          isFromSearch: true,
+        },
+      },
+    ]);
+    expect(state.get(M3)?.labels).toEqual(['INBOX', 'UNREAD']);
+    // Writes look in the trash too
+    expect(
+      calls.filter(([t]) => t === 'mails.MailAdvancedSearchRequest').map(([, d]) => d.label),
+    ).toEqual(['', 'TRASH']);
+
+    calls.length = 0;
+    await expect(c.mail.trash([T1, T2], true, { threads: true })).rejects.toThrow(
+      `Mail thread not found: ${T2}`,
+    );
     expect(changes(calls)).toHaveLength(0);
   });
 });
@@ -762,6 +1228,21 @@ describe('mail permissions', () => {
     expect(fn('reply')(M1, { text: 'x' }, { draftOnly: true })).toBe('mail.draft');
     expect(fn('forward')(M1, { to: [PEER] })).toBe('mail.forward');
     expect(fn('forward')(M1, { to: [PEER] }, { draftOnly: true })).toBe('mail.draft');
+    expect(MAIL_METHOD_PERMISSIONS).toMatchObject({
+      modify: 'mail.label',
+      list: 'mail.list',
+      threads: 'mail.list',
+      resolveTarget: 'mail.labels',
+      resolveLabel: 'mail.labels',
+      threadMembers: 'mail.thread',
+      thread: 'mail.thread',
+      search: 'mail.search',
+      messages: 'mail.get',
+      markRead: 'mail.read',
+      flag: 'mail.flag',
+      archive: 'mail.archive',
+      trash: 'mail.trash',
+    });
     for (const v of Object.values(MAIL_METHOD_PERMISSIONS))
       if (typeof v === 'string') expect(Object.hasOwn(PERMISSIONS, v)).toBe(true);
   });
@@ -824,5 +1305,89 @@ describe('mail permissions', () => {
       else process.env.LARKX_HOME = savedHome;
       rmSync(home, { recursive: true, force: true });
     }
+  });
+});
+
+describe('mail regressions', () => {
+  test('resolveTarget(): an all-caps user label name resolves to its id, not a system id', async () => {
+    const c = newClient();
+    fakeApi(c, {
+      'mails.MailInitSyncRequest': () => ({
+        coldStart: {
+          labelList: {
+            systemLabels: [{ id: 'INBOX', name: 'INBOX', isSystem: true }],
+            userLabels: [{ id: '7300000000000000003', name: 'VIP' }],
+            userFolders: [],
+          },
+        },
+      }),
+    });
+    expect(await c.mail.resolveTarget('VIP')).toEqual({ id: '7300000000000000003', folder: false });
+    // Unknown all-caps ids (other system labels) still pass through
+    expect(await c.mail.resolveTarget('READ_RECEIPT_REQUEST')).toEqual({
+      id: 'READ_RECEIPT_REQUEST',
+      folder: false,
+    });
+  });
+
+  test('writes: a message that vanishes after the update is reported as failed, not done', async () => {
+    const timers = instantTimers();
+    try {
+      const c = newClient();
+      const { state, handlers } = mailbox({
+        [M1]: [T1, ['INBOX', 'UNREAD']],
+        [M2]: [T1, ['INBOX', 'UNREAD']],
+      });
+      const apply = handlers['mailchanges.MailAddChangeRequest'] as Handler;
+      fakeApi(c, {
+        ...handlers,
+        'mailchanges.MailAddChangeRequest': (d) => {
+          const r = apply(d);
+          state.delete(M2);
+          return r;
+        },
+      });
+      const r = await c.mail.markRead([M1, M2]);
+      expect(r.messageIds).toEqual([M1]);
+      expect(r.failed).toEqual([{ messageId: M2, reason: 'message not found after the update' }]);
+    } finally {
+      timers.restore();
+    }
+  });
+
+  test('threadMembers(): subjects for more than 30 threads are fetched in batches of 30', async () => {
+    const c = newClient();
+    const threads = Array.from(
+      { length: 35 },
+      (_, i) => `70000000000000002${String(i).padStart(2, '0')}`,
+    );
+    const sizes: number[] = [];
+    let searches = 0;
+    fakeApi(c, {
+      'mails.GetThreadMetaByThreadIDsRequest': (d) => ({
+        metas: (d.threadBizIds as string[]).map((t) => ({
+          threadBizId: t,
+          messages: [{ messageBizId: `m-${t}` }],
+        })),
+      }),
+      'mails.GetMailMessageSummaryRequest': (d) => {
+        sizes.push((d.messageBizIds as string[]).length);
+        return {
+          messageSummaries: (d.messageBizIds as string[]).map((id) => ({
+            messageBizId: id,
+            content: { subject: `subject ${id}` },
+          })),
+        };
+      },
+      'mails.MailAdvancedSearchRequest': () => {
+        searches++;
+        return { msgSummary: [] };
+      },
+    });
+    const members = await c.mail.threadMembers(threads);
+    expect(sizes).toEqual([30, 5]);
+    // Every thread got its subject, so every thread was searched
+    expect(searches).toBe(35);
+    expect(members.get(threads[34] as string)).toEqual([`m-${threads[34]}`]);
   });
 });

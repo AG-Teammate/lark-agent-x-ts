@@ -59,25 +59,31 @@ Put `dist/lark` on your PATH. `lark --version` prints the version and build comm
 
 ## Mail
 
-`lark mail <action> [args]` reads and sends Lark Mail as you, over the same gateway as messages (no Open Platform app needed). Thread ids come from `list` and `search`, message ids from `thread` and `get`. Labels can be given by id or name (`inbox`, `sent`, `draft`, `archived`, `trash`, `spam`, `flagged`, or a user label or folder name as `labels` shows it). Unlike the chat commands, mail output is in English.
+`lark mail <action> [args]` reads and sends Lark Mail as you, over the same gateway as messages (no Open Platform app needed). Labels and folders can be given by id or name (`inbox`, `sent`, `draft`, `archived`, `trash`, `spam`, `flagged`, or a user label or folder name as `labels` shows it).
+
+Mail is handled **message by message**, like the desktop client: `list` and `search` print one row per message (`message_id`, `thread_id`, date, read/unread, sender, subject), and `read` / `flag` / `label` / `archive` / `trash` take message ids. With `--thread` they take thread ids and act on every message of those threads. Grouping by conversation is unreliable on its own: a thread can hold copies with different labels (e.g. the sent and received copies of mail you send to yourself), and the received copy may even sit in a different thread, so a thread-level view can hide messages that are still in your inbox. Every write re-reads the affected messages and reports any that didn't reach the requested state (on stderr, exit code 1).
 
 | Action | Description |
 |-------|------|
 | `labels` / `addresses` | Labels and folders with unread counts / the account's sending addresses (default first) |
-| `list [label]` | Threads under a label, newest first (default `inbox`; `--limit`; `--before <time>` lists older threads, so pass the last thread's `updatedAt` from `--json` to page exactly; `--unread` keeps only the unread threads among those listed; `--json`) |
+| `list [label]` | Messages under a label or folder, newest first (default `inbox`; `--limit`; `--unread`; `--before <time>` for older mail, e.g. the last row's `createdAt` from `--json`; `--threads` groups by conversation instead; `--json`) |
 | `thread <thread_id>` / `get <message_id...>` | A whole conversation / messages by id, with bodies and attachments (`--html` prints the HTML body, `--json`) |
-| `search <keyword>` | Server-side search (`--from`, `--to`, `--subject`, `--label`, `--since` / `--until`, `--attachments`, `--limit`, `--json`) |
+| `search <keyword>` | Server-side search, one row per message (`--from`, `--to`, `--subject`, `--label` (label or folder), `--since` / `--until`, `--attachments`, `--unread`, `--limit`, `--json`); trashed mail is only found with `--label trash` |
 | `download <message_id>` | Save a message's attachments (`-o <dir>`, default the current directory) |
 | `send <body>` | Send a new email: `--to`, `--cc`, `--bcc` (comma-separated), `--subject`, `--attach <paths>`, `--from <address>`; `--html` treats the body as HTML, `--body-file` reads it from a file, `--draft` only saves a draft |
 | `reply <message_id> <body>` | Reply in the thread, quoting the original (`--all` replies to everyone, `--no-quote`, `--attach`, `--draft`) |
 | `forward <message_id> <body>` | Forward with the original's attachments (`--to` required, `--cc`, `--bcc`, `--attach`, `--draft`) |
 | `send-draft <draft_id>` / `delete-draft <draft_id...>` | Send a saved draft / delete drafts |
-| `read <thread_id...>` | Mark threads read (`--unread` marks them unread) |
-| `flag <thread_id...>` / `label <label> <thread_id...>` | Flag threads / add a label (`--remove` undoes either) |
-| `archive <thread_id...>` / `trash <thread_id...>` | Archive (`--undo` moves back to the inbox) / move to the trash (`--restore` restores) |
+| `read <message_id...>` | Mark messages read (`--unread` marks them unread) |
+| `flag <message_id...>` / `label <label> <message_id...>` | Flag messages / add a label (`--remove` undoes either) |
+| `archive <message_id...>` / `trash <message_id...>` | Archive (`--undo` moves back to the inbox) / move to the trash (`--restore` restores) |
+
+All five also accept `--thread` (the ids are thread ids) and `--json` (prints `{messageIds, failed}`).
 
 ```bash
 lark mail list --limit 10
+lark mail list --unread
+lark mail trash <message_id> <message_id>
 lark mail send --to someone@example.com --subject "Weekly report" "Hi,\nthe report is attached." --attach report.pdf
 lark mail reply <message_id> "Thanks, looks good." --all
 lark mail search invoice --since 30d --attachments
@@ -169,11 +175,11 @@ const [quoted] = await client.getMessages(['<msg_id>']); // fetch messages by id
 const missed = await client.missedMessages(Date.now() - 10 * 60_000); // backfill after reconnecting: messages that arrived after a given time (including thread replies)
 
 // Lark Mail: client.mail, same credentials and permission rules
-const threads = await client.mail.threads('INBOX', { limit: 20 }); // newest first; pass { before: threads.at(-1).updatedAt } for the next page
-const conversation = await client.mail.thread(threads[0].threadId); // messages with text, HTML and attachments
+const inbox = await client.mail.list('INBOX', { limit: 20, unreadOnly: true }); // one entry per message, newest first; { until: inbox.at(-1).createdAt } pages
+const conversation = await client.mail.thread(inbox[0].threadId); // messages with text, HTML and attachments; threads() is the grouped view
 await client.mail.send({ to: ['someone@example.com'], subject: 'Hi', text: 'Hello', attachments: [{ name: 'a.pdf', data: readFileSync('a.pdf') }] });
 await client.mail.reply('<message_id>', { text: 'Thanks', all: true }); // also forward, sendDraft, deleteDrafts; { draftOnly: true } saves a draft
-await client.mail.markRead([threads[0].threadId]); // also flag, archive, trash, modifyThreads (labels), search, labels, downloadAttachment
+const { messageIds, failed } = await client.mail.markRead([inbox[0].messageId]); // also flag, archive, trash, modify (labels); { threads: true } takes thread ids; failed lists messages whose state didn't change
 
 // Permissions: not checked by default (everything allowed). permissions: true uses the same rules as the CLI, or pass a rule set directly
 const guarded = await LarkClient.create(new LarkAuth(), { permissions: { allow: ['query', 'send'], deny: ['*'] } });
@@ -183,7 +189,7 @@ await guarded.recallMessage('<msg_id>').catch((e) => e instanceof PermissionDeni
 **Permissions**: the `permissions` option of `LarkClient.create` enables the same [command permissions](#command-permissions) as the CLI. When omitted, nothing is checked, same as before.
 
 - `true`: uses this account's rules from `permissions.json` next to the credentials, falling back to `LARKX_ALLOW` / `LARKX_DENY`; rules are re-read on every call, so changes take effect without a restart. You can also pass `{ allow, deny }` directly.
-- Each public method maps to a permission item of the same name (classified under the closest command, e.g. `addMembers` → `group.add`, `sendMessage` maps to `send` / `send-image` / `send-file` depending on content, `api` and `gatewayPost` → `api`). `client.mail` methods map to the `mail.*` items (`threads` → `mail.list`, `send` → `mail.send`, or `mail.draft` with `draftOnly`). When not allowed, it throws `PermissionDenied` (with `permission`, `group`, `rule`).
+- Each public method maps to a permission item of the same name (classified under the closest command, e.g. `addMembers` → `group.add`, `sendMessage` maps to `send` / `send-image` / `send-file` depending on content, `api` and `gatewayPost` → `api`). `client.mail` methods map to the `mail.*` items (`list` / `threads` → `mail.list`, `markRead` → `mail.read`, `send` → `mail.send`, or `mail.draft` with `draftOnly`). When not allowed, it throws `PermissionDenied` (with `permission`, `group`, `rule`).
 - Only the layer the caller invokes directly is checked: methods called internally by another method (e.g. the gateway call made while sending) are not checked again. Callbacks passed to methods (e.g. the persistent connection's `onMessage`) don't count as part of the method; calls made inside them are checked as usual.
 - The standalone functions `uploadImage`, `uploadFile` and `downloadMessageResource` don't go through the client and are not subject to permissions.
 - `PERMISSIONS`, `GROUPS`, `decide`, `loadRules` and `saveAccountRules` are exported too, for building your own permissions UI.

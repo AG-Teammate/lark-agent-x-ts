@@ -7,7 +7,14 @@ import { AuthExpired, LarkAuth, QR_STATUS_NAMES, QrLogin } from '../auth.js';
 import { LarkClient, type SendOptions } from '../client.js';
 import { dataDir, loadConfig } from '../config.js';
 import { getLogger } from '../log.js';
-import { htmlToText, type MailAddress, type MailFile, type MailMessage } from '../mail.js';
+import {
+  htmlToText,
+  type MailAddress,
+  type MailChangeResult,
+  type MailFile,
+  type MailMessage,
+  type MailSearchHit,
+} from '../mail.js';
 import { download, extractResourceKey, messageResourceUrl } from '../media.js';
 import {
   decide,
@@ -1718,6 +1725,8 @@ const MAIL_ACTIONS = [
 type MailAction = (typeof MAIL_ACTIONS)[number];
 
 const fmtAddress = (a: MailAddress) => (a.name ? `${a.name} <${a.address}>` : a.address);
+const fmtHit = (h: MailSearchHit) =>
+  `${h.messageId}\t${h.threadId}\t${localDatetime(h.createdAt)}\t${h.unread ? 'unread' : 'read'}\t${h.from}\t${h.subject || '(no subject)'}`;
 const fmtSize = (n: number) =>
   n < 1024
     ? `${n} B`
@@ -1769,7 +1778,7 @@ const mailCmd: Command = {
     {
       name: 'args',
       nargs: '*',
-      help: 'ids, label, keyword or body text, depending on the action',
+      help: 'message ids (thread ids with --thread), label, keyword or body text, depending on the action',
     },
   ],
   options: [
@@ -1804,8 +1813,18 @@ const mailCmd: Command = {
     { name: 'since', kind: 'string', help: 'search from this time (3d, 2026-10-01, timestamp)' },
     { name: 'until', kind: 'string', help: 'search until this time' },
     { name: 'attachments', kind: 'flag', help: 'search only mail with attachments' },
-    { name: 'before', kind: 'string', help: 'list threads older than this time (paging)' },
-    { name: 'unread', kind: 'flag', help: 'list: only unread threads; read: mark unread instead' },
+    { name: 'before', kind: 'string', help: 'list: only mail older than this time (paging)' },
+    {
+      name: 'unread',
+      kind: 'flag',
+      help: 'list/search: only unread mail; read: mark unread instead',
+    },
+    { name: 'threads', kind: 'flag', help: 'list: group by conversation (one row per thread)' },
+    {
+      name: 'thread',
+      kind: 'flag',
+      help: 'read/flag/label/archive/trash: the ids are thread ids; act on all their messages',
+    },
     { name: 'remove', kind: 'flag', help: 'flag/label: remove instead of add' },
     { name: 'undo', kind: 'flag', help: 'archive: move back to the inbox' },
     { name: 'restore', kind: 'flag', help: 'trash: restore from the trash' },
@@ -1842,20 +1861,30 @@ const mailCmd: Command = {
           return 0;
         }
         case 'list': {
-          const label = await m.resolveLabel(args[0] ?? 'INBOX');
-          let threads = await m.threads(label, {
+          const target = args[0] ?? 'INBOX';
+          if (a.threads) {
+            let threads = await m.threads(await m.resolveLabel(target), {
+              limit: Number(a.limit),
+              ...(a.before ? { before: parseTimeArg(String(a.before)) } : {}),
+            });
+            if (a.unread) threads = threads.filter((t) => t.unread);
+            if (json) printJson(threads);
+            else
+              for (const t of threads) {
+                const l = t.latest;
+                out(
+                  `${t.threadId}\t${localDatetime(t.updatedAt)}\t${t.unread ? 'unread' : 'read'}\t${l ? fmtAddress(l.from) : ''}\t${l?.subject || '(no subject)'}${t.messageCount > 1 ? ` (${t.messageCount})` : ''}`,
+                );
+              }
+            return 0;
+          }
+          const msgs = await m.list(target, {
             limit: Number(a.limit),
-            ...(a.before ? { before: parseTimeArg(String(a.before)) } : {}),
+            ...(a.before ? { until: parseTimeArg(String(a.before)) } : {}),
+            unreadOnly: Boolean(a.unread),
           });
-          if (a.unread) threads = threads.filter((t) => t.unread);
-          if (json) printJson(threads);
-          else
-            for (const t of threads) {
-              const l = t.latest;
-              out(
-                `${t.threadId}\t${localDatetime(t.updatedAt)}\t${t.unread ? 'unread' : 'read'}\t${l ? fmtAddress(l.from) : ''}\t${l?.subject || '(no subject)'}${t.messageCount > 1 ? ` (${t.messageCount})` : ''}`,
-              );
-            }
+          if (json) printJson(msgs);
+          else for (const h of msgs) out(fmtHit(h));
           return 0;
         }
         case 'thread': {
@@ -1879,18 +1908,19 @@ const mailCmd: Command = {
             ...(a.from ? { from: list(a.from) ?? [] } : {}),
             ...(a.to ? { to: list(a.to) ?? [] } : {}),
             ...(a.subject ? { subject: list(a.subject) ?? [] } : {}),
-            ...(a.label ? { label: await m.resolveLabel(String(a.label)) } : {}),
+            ...(a.label
+              ? await m
+                  .resolveTarget(String(a.label))
+                  .then((t) => (t.folder ? { folder: t.id } : { label: t.id }))
+              : {}),
+            unreadOnly: Boolean(a.unread),
             ...(a.since ? { since: parseTimeArg(String(a.since)) } : {}),
             ...(a.until ? { until: parseTimeArg(String(a.until)) } : {}),
             hasAttachment: Boolean(a.attachments),
             limit: Number(a.limit),
           });
           if (json) printJson(hits);
-          else
-            for (const h of hits)
-              out(
-                `${h.threadId}\t${h.messageId}\t${localDatetime(h.createdAt)}\t${h.from}\t${h.subject}`,
-              );
+          else for (const h of hits) out(fmtHit(h));
           return 0;
         }
         case 'download': {
@@ -1974,33 +2004,51 @@ const mailCmd: Command = {
           out(`deleted ${args.length} draft(s)`);
           return 0;
         case 'read':
-          need(1, 'thread_id');
-          await m.markRead(args, !a.unread);
-          out(`marked ${args.length} thread(s) ${a.unread ? 'unread' : 'read'}`);
-          return 0;
         case 'flag':
-          need(1, 'thread_id');
-          await m.flag(args, !a.remove);
-          out(`${a.remove ? 'unflagged' : 'flagged'} ${args.length} thread(s)`);
-          return 0;
-        case 'label': {
-          need(2, 'label and thread_id');
-          const [name, ...ids] = args;
-          const id = await m.resolveLabel(name as string);
-          await m.modifyThreads(ids, a.remove ? { remove: [id] } : { add: [id] });
-          out(`${a.remove ? 'removed' : 'added'} label ${name} on ${ids.length} thread(s)`);
-          return 0;
-        }
+        case 'label':
         case 'archive':
-          need(1, 'thread_id');
-          await m.archive(args, !a.undo);
-          out(`${a.undo ? 'moved to inbox' : 'archived'} ${args.length} thread(s)`);
-          return 0;
-        case 'trash':
-          need(1, 'thread_id');
-          await m.trash(args, !a.restore);
-          out(`${a.restore ? 'restored' : 'trashed'} ${args.length} thread(s)`);
-          return 0;
+        case 'trash': {
+          const what = a.thread ? 'thread_id' : 'message_id';
+          let ids = args;
+          let labelName = '';
+          if (action === 'label') {
+            need(2, `label and ${what}`);
+            [labelName, ...ids] = args as [string, ...string[]];
+          } else need(1, what);
+          const o = { threads: Boolean(a.thread) };
+          let r: MailChangeResult;
+          let done: string;
+          switch (action) {
+            case 'read':
+              r = await m.markRead(ids, !a.unread, o);
+              done = `marked ${a.unread ? 'unread' : 'read'}`;
+              break;
+            case 'flag':
+              r = await m.flag(ids, !a.remove, o);
+              done = a.remove ? 'unflagged' : 'flagged';
+              break;
+            case 'label': {
+              const id = await m.resolveLabel(labelName);
+              r = await m.modify(ids, a.remove ? { remove: [id] } : { add: [id] }, o);
+              done = `${a.remove ? 'removed' : 'added'} label ${labelName} on`;
+              break;
+            }
+            case 'archive':
+              r = await m.archive(ids, !a.undo, o);
+              done = a.undo ? 'moved to inbox' : 'archived';
+              break;
+            default:
+              r = await m.trash(ids, !a.restore, o);
+              done = a.restore ? 'restored' : 'trashed';
+          }
+          if (json) printJson(r);
+          else {
+            out(`${done} ${r.messageIds.length} message(s)`);
+            if (a.thread || r.failed.length) for (const id of r.messageIds) out(`ok\t${id}`);
+          }
+          for (const f of r.failed) err(`failed\t${f.messageId}\t${f.reason}`);
+          return r.failed.length ? 1 : 0;
+        }
       }
     } catch (e) {
       if (e instanceof UsageHint) {
