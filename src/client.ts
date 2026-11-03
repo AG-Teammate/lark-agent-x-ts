@@ -149,7 +149,7 @@ export interface MessageSearchOptions {
   limit?: number | undefined;
 }
 
-/** A search hit: summary is the server-provided snippet ("发送者: 内容…", i.e. "sender: content…", with highlight markup stripped); chatTitle is the chat name. */
+/** A search hit: summary is the server-provided snippet ("sender: content…" in the server's locale, with highlight markup stripped); chatTitle is the chat name. */
 export interface MessageHit {
   msgId: string;
   chatId: string;
@@ -205,7 +205,7 @@ export interface ScheduledMessage {
   message: LarkMessage | null;
 }
 
-// ScheduleMessage.Status、PullChatScheduleMessagesRequest.EntityType、PatchScheduleMessageRequest.PatchType
+// ScheduleMessage.Status, PullChatScheduleMessagesRequest.EntityType, PatchScheduleMessageRequest.PatchType
 const SCHEDULE_PENDING = 1;
 const SCHEDULE_SUSPEND = 2;
 const SCHEDULE_CHAT_ONLY = 1;
@@ -421,7 +421,7 @@ export class LarkClient {
       };
       const onAbort = () => finish();
       const openTimer = setTimeout(
-        () => finish(new Error(`WS 握手超时(${openTimeoutMs}ms)`)),
+        () => finish(new Error(`WS handshake timed out (${openTimeoutMs}ms)`)),
         openTimeoutMs,
       );
       if (signal?.aborted) return finish();
@@ -429,15 +429,15 @@ export class LarkClient {
       ws.addEventListener('open', () => {
         clearTimeout(openTimer);
         lastFrameAt = Date.now();
-        logger.info('WS 已连接');
+        logger.info('WS connected');
         onOpen?.();
         heartbeat = setInterval(() => {
           if (Date.now() - lastFrameAt > idleTimeoutMs)
-            return finish(new Error(`WS 心跳无回应: ${idleTimeoutMs}ms 内没有收到任何帧`));
+            return finish(new Error(`WS heartbeat lost: no frames received in ${idleTimeoutMs}ms`));
           try {
             ws.send(LarkClient.wrapFrame(LarkClient.packet({ cmd: 4 })));
           } catch (err) {
-            finish(new Error(`WS 心跳发送失败: ${(err as Error).message}`));
+            finish(new Error(`WS heartbeat send failed: ${(err as Error).message}`));
           }
         }, heartbeatMs);
       });
@@ -458,7 +458,7 @@ export class LarkClient {
             for (const ev of decodePushReactions(packet.payload as Uint8Array))
               chain = chain.then(() =>
                 onReaction(ev).catch((err) =>
-                  logger.error(`表情回调异常: ${(err as Error).message}`),
+                  logger.error(`reaction callback error: ${(err as Error).message}`),
                 ),
               );
             return;
@@ -469,7 +469,7 @@ export class LarkClient {
             chain = chain.then(() => this.dispatch(msg, onMessage));
           }
         } catch (err) {
-          logger.debug(`跳过异常帧: ${(err as Error).message}`);
+          logger.debug(`skipping bad frame: ${(err as Error).message}`);
         }
       });
       ws.addEventListener('error', () => {
@@ -477,7 +477,10 @@ export class LarkClient {
       });
       ws.addEventListener('close', (ev) => {
         if (ev.code === 1000 || signal?.aborted) finish();
-        else finish(new Error(`WS 连接关闭: code=${ev.code}${ev.reason ? ` ${ev.reason}` : ''}`));
+        else
+          finish(
+            new Error(`WS connection closed: code=${ev.code}${ev.reason ? ` ${ev.reason}` : ''}`),
+          );
       });
     });
     await chain;
@@ -494,7 +497,7 @@ export class LarkClient {
     try {
       await onMessage(await this.fixThreadScope(msg));
     } catch (err) {
-      logger.error(`消息回调异常: ${(err as Error).message}`);
+      logger.error(`message callback error: ${(err as Error).message}`);
     }
   }
 
@@ -567,7 +570,9 @@ export class LarkClient {
           err instanceof SendUnconfirmed ||
           (err instanceof HttpError && err.status >= 500);
         if (!retryable || attempt >= retries) throw err;
-        logger.warning(`发送失败,重试(${attempt + 1}/${retries}): ${(err as Error).message}`);
+        logger.warning(
+          `send failed, retrying (${attempt + 1}/${retries}): ${(err as Error).message}`,
+        );
         await new Promise((r) => setTimeout(r, this.sendRetryDelayMs * (attempt + 1)));
       }
     }
@@ -626,7 +631,7 @@ export class LarkClient {
       entityId: o.rootId || chatId,
     });
     const id = (resp.message as Dict | undefined)?.messageId;
-    if (!id) throw new Error('定时发送失败: 响应里没有消息 id');
+    if (!id) throw new Error('scheduled send failed: no message id in response');
     return String(id);
   }
 
@@ -677,12 +682,15 @@ export class LarkClient {
       msgId = decodePutMessageResponse(resp);
     } catch (err) {
       throw new SendUnconfirmed(
-        `服务端已接受发送请求,但响应解析失败,无法确认是否发出: ${(err as Error).message}`,
+        `server accepted the send request but the response could not be parsed; delivery unconfirmed: ${(err as Error).message}`,
         cid,
       );
     }
     if (!msgId)
-      throw new SendUnconfirmed('服务端已接受发送请求,但响应里没有消息 id,无法确认是否发出', cid);
+      throw new SendUnconfirmed(
+        'server accepted the send request but returned no message id; delivery unconfirmed',
+        cid,
+      );
     return msgId;
   }
 
@@ -697,7 +705,7 @@ export class LarkClient {
       return await this.sendMessage(chatId, { text, links: richLinks }, o);
     } catch (err) {
       const msg = (err as Error).message;
-      logger.error(err instanceof SendUnconfirmed ? msg : `发送消息失败: ${msg}`);
+      logger.error(err instanceof SendUnconfirmed ? msg : `send message failed: ${msg}`);
       return null;
     }
   }
@@ -712,7 +720,7 @@ export class LarkClient {
     try {
       return await this.sendMessage(chatId, { blocks, text: innerText }, o);
     } catch (err) {
-      logger.error(`发送富文本失败: ${(err as Error).message}`);
+      logger.error(`send rich text failed: ${(err as Error).message}`);
       return null;
     }
   }
@@ -727,7 +735,7 @@ export class LarkClient {
     try {
       return await this.sendMessage(chatId, { html, title }, o);
     } catch (err) {
-      logger.error(`发送富文本失败: ${(err as Error).message}`);
+      logger.error(`send rich text failed: ${(err as Error).message}`);
       return null;
     }
   }
@@ -899,7 +907,7 @@ export class LarkClient {
       cid: o.cid || requestCid(),
     });
     const id = String((resp.chat as Dict | undefined)?.id ?? '');
-    if (!id) throw new Error('建群失败: 响应里没有会话 id');
+    if (!id) throw new Error('create group failed: no chat id in response');
     return id;
   }
 
@@ -931,7 +939,7 @@ export class LarkClient {
   async pinMessage(chatId: string, messageId: string): Promise<string> {
     const resp = await this.api('pin.PutPinRequest', { chatId, messageId });
     const id = (resp.pin as Dict | undefined)?.id;
-    if (id === undefined) throw new Error('Pin 失败: 响应里没有 pin id');
+    if (id === undefined) throw new Error('pin failed: no pin id in response');
     return String(id);
   }
 
@@ -1115,7 +1123,7 @@ export class LarkClient {
     });
     const out = ((resp.trgContents ?? []) as string[]).map(String);
     if (out.length !== texts.length)
-      throw new Error(`翻译结果条数不符: ${out.length}/${texts.length}`);
+      throw new Error(`translation count mismatch: ${out.length}/${texts.length}`);
     return out;
   }
 
@@ -1140,7 +1148,7 @@ export class LarkClient {
   async recallMessage(msgId: string): Promise<void> {
     const resp = await this.api('messages.DeleteMessageRequest', { id: msgId });
     if (resp.message !== 'ok')
-      throw new Error(`撤回失败: ${String(resp.message ?? '服务端没有确认')}`);
+      throw new Error(`recall failed: ${String(resp.message ?? 'not confirmed by server')}`);
   }
 
   /**
@@ -1236,7 +1244,7 @@ export class LarkClient {
       });
       return true;
     } catch (err) {
-      logger.debug(`标记已读失败: ${(err as Error).message}`);
+      logger.debug(`mark read failed: ${(err as Error).message}`);
       return false;
     }
   }
@@ -1251,13 +1259,13 @@ export class LarkClient {
     const found = ((await this.api('messages.PullMessagesByIdsRequest', { messageIds })).messages ??
       {}) as Record<string, Dict>;
     const missing = messageIds.filter((m) => !(m in found));
-    if (missing.length) throw new Error(`找不到消息: ${missing.join(', ')}`);
+    if (missing.length) throw new Error(`message not found: ${missing.join(', ')}`);
     const chatIds: string[] = [];
     let chatMax = -1;
     const threads = new Map<string, { ids: string[]; max: number }>();
     for (const mid of messageIds) {
       const v = found[mid] as Dict;
-      if (String(v.chatId) !== chatId) throw new Error(`消息 ${mid} 不在会话 ${chatId} 里`);
+      if (String(v.chatId) !== chatId) throw new Error(`message ${mid} is not in chat ${chatId}`);
       const position = v.position as number | undefined;
       if (position !== undefined && position >= 0) {
         chatIds.push(mid);
@@ -1285,7 +1293,8 @@ export class LarkClient {
       ).messages ?? {}) as Record<string, Dict>;
       for (const [threadId, t] of threads) {
         const rootPosition = roots[threadId]?.position;
-        if (rootPosition === undefined) throw new Error(`找不到话题根消息: ${threadId}`);
+        if (rootPosition === undefined)
+          throw new Error(`thread root message not found: ${threadId}`);
         await this.api('messages.PutReadMessagesRequest', {
           chatId,
           maxPosition: rootPosition,
@@ -1307,7 +1316,7 @@ export class LarkClient {
   /** Same as api, but the request is built as a protobuf object: byte fields take Uint8Array, int64 takes bigint (rich-text element properties are bytes). */
   private async call(typeName: string, init: Record<string, unknown>): Promise<Dict> {
     const { cmd, req, resp } = resolveCmd(typeName);
-    if (!req) throw new Error(`${typeName} 不是请求类型`);
+    if (!req) throw new Error(`${typeName} is not a request type`);
     return this.post(cmd, toBinary(req, create(req, init)), resp);
   }
 
@@ -1337,7 +1346,9 @@ export class LarkClient {
     try {
       info = await this.getChatInfo(chatId);
     } catch (err) {
-      logger.debug(`查询会话模式失败,按普通会话处理: ${(err as Error).message}`);
+      logger.debug(
+        `chat mode lookup failed, treating as a regular chat: ${(err as Error).message}`,
+      );
       return false;
     }
     if (!info) return false;
@@ -1430,7 +1441,7 @@ export class LarkClient {
           const members = await this.chatMembers(c.chatId, 10);
           c.name = (members.find((m) => m.id !== self) ?? members[0])?.name ?? '';
         } catch (err) {
-          logger.debug(`查询私聊对方失败 ${c.chatId}: ${(err as Error).message}`);
+          logger.debug(`P2P partner lookup failed for ${c.chatId}: ${(err as Error).message}`);
         }
       }
     };

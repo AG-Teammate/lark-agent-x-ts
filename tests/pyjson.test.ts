@@ -3,8 +3,9 @@ import { parseJsonKeepingBigInts } from '../src/proto/dict.js';
 import { floatRepr, PyFloat, pyBytesRepr, pyDumps } from '../src/pyjson.js';
 import { head, preview } from '../src/text.js';
 
-// Expected values taken from Python 3 repr / json.dumps(ensure_ascii=False)
-describe('Python 兼容的序列化', () => {
+// Expected values taken from Python 3 repr / json.dumps(ensure_ascii=False).
+// CJK strings here are deliberate: they check that non-ASCII text is emitted unescaped and sliced by code point.
+describe('Python-compatible serialization', () => {
   test('float repr', () => {
     const cases: [number, string][] = [
       [1, '1.0'],
@@ -19,7 +20,7 @@ describe('Python 兼容的序列化', () => {
     for (const [n, s] of cases) expect(floatRepr(n)).toBe(s);
   });
 
-  test('json.dumps：分隔符、转义、bigint、缩进', () => {
+  test('json.dumps: separators, escaping, bigint, indent', () => {
     expect(pyDumps({ a: [1, 2, { b: null }], c: '中"\\\n\u0001' })).toBe(
       '{"a": [1, 2, {"b": null}], "c": "中\\"\\\\\\n\\u0001"}',
     );
@@ -48,7 +49,7 @@ describe('Python 兼容的序列化', () => {
     for (const [bytes, s] of cases) expect(pyBytesRepr(Uint8Array.from(bytes))).toBe(s);
   });
 
-  test('解析 JSON 时保住超出安全整数的 id（转成字符串），其余数字与字符串不动', () => {
+  test('JSON parsing keeps ids beyond the safe integer range (as strings); other numbers and strings unchanged', () => {
     expect(
       parseJsonKeepingBigInts(
         '{"chatIds": [7300000000000000001, "7300000000000000002"], "n": 12, "s": "a 7300000000000000001, b", "f": -1.5e3}',
@@ -65,7 +66,7 @@ describe('Python 兼容的序列化', () => {
     ]);
   });
 
-  test('按码点截取（Python 切片），不切断代理对', () => {
+  test('slices by code point (Python slicing) without splitting surrogate pairs', () => {
     expect(head('😀ab', 2)).toBe('😀a');
     expect(preview('月报导出能加筛选', 4)).toBe('月报导出…');
     expect(preview('短', 4)).toBe('短');

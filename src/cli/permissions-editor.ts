@@ -17,9 +17,10 @@ import {
 
 export type State = 'inherit' | 'allow' | 'deny';
 
-const LABEL: Record<State, string> = { inherit: '继承', allow: '允许', deny: '拒绝' };
+const LABEL: Record<State, string> = { inherit: 'inherit', allow: 'allow', deny: 'deny' };
 const NEXT: Record<State, State> = { inherit: 'allow', allow: 'deny', deny: 'inherit' };
-const HELP = '↑↓ 移动  ←→ 折叠/展开  空格 切换  a 允许  d 拒绝  i 继承  s 保存  q 退出';
+const HELP =
+  '↑↓ move  ←→ collapse/expand  space toggle  a allow  d deny  i inherit  s save  q quit';
 
 /** Fields used from readline keypress events. */
 export interface Key {
@@ -35,13 +36,19 @@ interface Row {
 }
 
 const paint = (code: string, s: string) => `\x1b[${code}m${s}\x1b[0m`;
-const verdictText = (v: Verdict) => (v.allowed ? paint('32', '允许') : paint('31', '拒绝'));
+// Fixed column widths so the state and result columns line up whatever the label lengths.
+const STATE_WIDTH = Math.max(...Object.values(LABEL).map((l) => l.length));
+const VERDICT_WIDTH = Math.max(LABEL.allow.length, LABEL.deny.length);
+const verdictText = (v: Verdict) =>
+  v.allowed
+    ? paint('32', LABEL.allow.padEnd(VERDICT_WIDTH))
+    : paint('31', LABEL.deny.padEnd(VERDICT_WIDTH));
 const stateText = (st: State) =>
   st === 'allow'
-    ? paint('32', LABEL.allow)
+    ? paint('32', LABEL.allow.padEnd(STATE_WIDTH))
     : st === 'deny'
-      ? paint('31', LABEL.deny)
-      : paint('2', LABEL.inherit);
+      ? paint('31', LABEL.deny.padEnd(STATE_WIDTH))
+      : paint('2', LABEL.inherit.padEnd(STATE_WIDTH));
 
 /** Terminal display width: CJK characters and full-width symbols take two columns. */
 function width(s: string): number {
@@ -205,14 +212,14 @@ export class PermissionEditor {
     if (this.note) head.push(paint('2', this.note));
     const extras = this.extras();
     if (extras.length)
-      head.push(paint('2', `树里没有的规则(保存时原样保留): ${extras.join(', ')}`));
+      head.push(paint('2', `rules not in the tree (kept as-is on save): ${extras.join(', ')}`));
     head.push(paint('2', HELP), '');
     const foot = [
       '',
       this.confirming
-        ? paint('33', '有未保存的修改: s 保存并退出 · q 放弃修改 · 其他键返回')
+        ? paint('33', 'unsaved changes: s save and quit · q discard · any other key to go back')
         : this.dirty
-          ? paint('33', '已修改,未保存')
+          ? paint('33', 'modified, not saved')
           : '',
     ];
 
@@ -245,12 +252,12 @@ export class PermissionEditor {
         : row.item
           ? st === 'inherit'
             ? v.rule
-              ? `由 ${v.rule} 决定`
-              : '没有规则,默认允许'
+              ? `decided by ${v.rule}`
+              : 'no rule, allowed by default'
             : ''
-          : '全部命令';
-      // Leading columns: cursor 2 + name + state 4 + arrow 4 + result 4 + gap 2
-      const rest = columns - 1 - (2 + nameWidth + 4 + 4 + 4 + 2);
+          : 'all commands';
+      // Leading columns: cursor 2 + name + state + arrow 4 + result + gap 2
+      const rest = columns - 1 - (2 + nameWidth + STATE_WIDTH + 4 + VERDICT_WIDTH + 2);
       const pointer = at ? paint('36', '› ') : '  ';
       return `${pointer}${at ? paint('1', name) : name}${stateText(st)}  → ${verdictText(v)}  ${paint('2', clip(note, rest))}`;
     });

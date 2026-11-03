@@ -7,8 +7,9 @@ import type { AgentBackend } from './backend.js';
 const logger = getLogger('larkx.agent');
 
 export const INSTRUCTIONS =
-  '以上是飞书会话里新到的一条消息(XML 里有会话/发送者/内容)。你是这个数字人,完整对话历史你都有。如果对方也是机器人且只是互相客套寒暄,直接结束不要再接话。';
-export const OUTPUT_RULES = '不需要回复就直接结束,不要解释、不要复述消息。';
+  'Above is a new message from a Lark chat (the XML contains the chat, sender and content). You are this digital twin and have the full conversation history. If the other party is also a bot and you are just exchanging pleasantries, stop and do not reply.';
+export const OUTPUT_RULES =
+  'If no reply is needed, just stop; do not explain or restate the message.';
 
 /** The quoted (replied-to) message: the digital twin needs the original text to know what the other party is responding to. */
 export interface QuotedMessage {
@@ -31,7 +32,7 @@ export interface AgentMessage extends LarkMessage {
 
 export type ReplyFn = (chatId: string, text: string, rootId?: string) => Promise<unknown>;
 
-/** xml.sax.saxutils.escape。 */
+/** xml.sax.saxutils.escape. */
 export const xmlEscape = (s: string): string =>
   s.replaceAll('&', '&amp;').replaceAll('>', '&gt;').replaceAll('<', '&lt;');
 
@@ -99,7 +100,7 @@ class SessionWorker {
         try {
           await this.dispatcher.handleMessage(this.sessionKey, msg);
         } catch (err) {
-          logger.error(`处理消息异常 [${this.sessionKey}]: ${(err as Error).message}`);
+          logger.error(`error handling message [${this.sessionKey}]: ${(err as Error).message}`);
         }
       }
     } finally {
@@ -168,13 +169,17 @@ export class AgentDispatcher {
       this.drainQueue(key);
       await this.backend.resetSession(key);
       if (!remainder) {
-        await this.replyFn(chatId, '✅ 已开启新会话', rootId);
+        await this.replyFn(chatId, '✅ Started a new session', rootId);
         return;
       }
     } else if (cmd === 'stop') {
       const n = this.drainQueue(key);
       if (!remainder) {
-        await this.replyFn(chatId, n ? `⏹ 已清空 ${n} 条排队消息` : '⏹ 队列已清空', rootId);
+        await this.replyFn(
+          chatId,
+          n ? `⏹ Cleared ${n} queued message${n === 1 ? '' : 's'}` : '⏹ Queue cleared',
+          rootId,
+        );
         return;
       }
     }
@@ -288,9 +293,9 @@ export class AgentDispatcher {
     const body = buildXmlMessage(msg);
     const chatId = String(msg.chat_id);
     const rootId = msg.anchor || '';
-    let replyCmd = `lark send ${chatId} "<回复内容>"`;
+    let replyCmd = `lark send ${chatId} "<reply text>"`;
     if (rootId) replyCmd += ` --root ${rootId}`;
-    const rules = `要回复就执行: ${replyCmd}\n${OUTPUT_RULES}`;
+    const rules = `To reply, run: ${replyCmd}\n${OUTPUT_RULES}`;
     const instructions = `${this.cfg.system_prompt || INSTRUCTIONS}\n${rules}`;
     const out = await this.backend.run(
       sessionKey,
@@ -298,6 +303,6 @@ export class AgentDispatcher {
       chatId,
       msg.anchor || '',
     );
-    if (out) logger.debug(`[${sessionKey}] agent 输出: ${head(out, 200)}`);
+    if (out) logger.debug(`[${sessionKey}] agent output: ${head(out, 200)}`);
   }
 }

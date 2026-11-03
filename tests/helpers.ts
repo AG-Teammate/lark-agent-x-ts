@@ -21,7 +21,7 @@ export const entity = (id: string, over: Dict = {}): Dict => ({
   chatId: '7200000000000000001',
   chatType: 2,
   createTime: 1_790_000_000n,
-  content: textContent(`消息${id.slice(-2)}`),
+  content: textContent(`message ${id.slice(-2)}`),
   ...over,
 });
 

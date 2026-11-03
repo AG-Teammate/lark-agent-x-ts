@@ -95,13 +95,13 @@ async function compile(protoPath: string): Promise<FileDescriptorProto> {
         stderr: 'inherit',
       },
     );
-    if ((await proc.exited) !== 0) throw new Error(`buf build ${protoPath} 失败`);
+    if ((await proc.exited) !== 0) throw new Error(`buf build ${protoPath} failed`);
     const set = fromBinary(
       FileDescriptorSetSchema,
       new Uint8Array(await Bun.file(out).arrayBuffer()),
     );
     const file = set.file.find((f) => f.name === name);
-    if (!file) throw new Error(`编译结果里没有 ${name}`);
+    if (!file) throw new Error(`${name} not in the build output`);
     stripJsonNames(file.messageType);
     return file;
   } finally {
@@ -145,7 +145,7 @@ function closure(file: FileDescriptorProto, seeds: string[]): Set<string> {
     const name = stack.pop() as string;
     if (need.has(name)) continue;
     const node = types.get(name);
-    if (!node) throw new Error(`找不到类型 ${name}`);
+    if (!node) throw new Error(`type not found: ${name}`);
     need.add(name);
     if ('field' in node) for (const f of node.field) if (f.typeName) stack.push(f.typeName);
   }
@@ -197,11 +197,11 @@ const larkAll = fromSource
       FileDescriptorSetSchema,
       new Uint8Array(await Bun.file(join(ASSETS_DIR, 'lark_all.binpb')).arrayBuffer()),
     ).file[0] as FileDescriptorProto);
-if (!fromSource) console.log(`没有 ${larkAllSrc},沿用 assets/lark_all.binpb`);
+if (!fromSource) console.log(`${larkAllSrc} not found, keeping assets/lark_all.binpb`);
 const seeds = CORE_TYPES.map((t) => `.lark.${t}`);
 for (const req of CORE_REQUESTS) {
   const entry = cmdMap.by_req[req];
-  if (!entry) throw new Error(`cmd_map 里没有 ${req}`);
+  if (!entry) throw new Error(`${req} not in cmd_map`);
   seeds.push(`.lark.${req}`, `.lark.${entry.resp}`);
 }
 await writeSet('proto', await compile(PROTO_SRC));

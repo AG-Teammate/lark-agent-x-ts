@@ -10,8 +10,8 @@ import { entity, newClient, pushFrame } from './helpers.js';
 const T = 1_790_000_000; // disconnect time (seconds)
 const at = (dt: number) => BigInt(T + dt);
 
-describe('补收断线期间的消息', () => {
-  test('话题回复：按话题内 position 拉最近 limit 条，不请求根消息', async () => {
+describe('catching up on messages missed while disconnected', () => {
+  test('topic replies: pull the latest limit by in-topic position without requesting the root', async () => {
     const c = newClient();
     const reqs: [string, Dict][] = [];
     c.api = async (type, data) => {
@@ -38,7 +38,7 @@ describe('补收断线期间的消息', () => {
     expect(await c.threadReplies('nope')).toEqual([]);
   });
 
-  test('普通会话从本地 position 之后拉，话题群按话题拉，只留断线之后的消息', async () => {
+  test('regular chats pull after the local position, thread groups pull per topic, keeping only messages after the disconnect', async () => {
     const c = newClient();
     const reqs: [string, Dict][] = [];
     const card = (id: string) => ({ id, type: 1, updateTimeMs: at(30) * 1000n, rankTime: at(30) });
@@ -114,7 +114,7 @@ describe('补收断线期间的消息', () => {
             },
           };
       }
-      throw new Error(`未预期的请求 ${String(type)}`);
+      throw new Error(`unexpected request ${String(type)}`);
     };
     const known: string[] = [];
     const got = await c.missedMessages(T * 1000, {
@@ -149,7 +149,7 @@ describe('补收断线期间的消息', () => {
     });
   });
 
-  test('断线重连后补收，已经收到的消息不会再交给 agent', async () => {
+  test('catch-up after reconnect does not hand already-received messages to the agent again', async () => {
     let conns = 0;
     const server = Bun.serve({
       port: 0,
@@ -208,8 +208,8 @@ describe('补收断线期间的消息', () => {
   });
 });
 
-describe('按 id 取消息与话题', () => {
-  test('getMessages 按传入顺序返回、跳过不存在的；话题群的根消息归到自己的话题', async () => {
+describe('fetching messages and topics by id', () => {
+  test('getMessages returns in the given order and skips missing ones; thread-group roots belong to their own topic', async () => {
     const c = newClient();
     c.isThreadChat = async (chatId) => chatId === 'tc';
     c.api = async (_type, data) => {
@@ -228,7 +228,7 @@ describe('按 id 取消息与话题', () => {
     expect(await c.getMessages([])).toEqual([]);
   });
 
-  test('threadMessages：根消息在前，随后是回复；根消息不存在时为空', async () => {
+  test('threadMessages: root first, then replies; empty when the root does not exist', async () => {
     const c = newClient();
     c.isThreadChat = async () => false;
     let rootExists = true;
@@ -248,8 +248,8 @@ describe('按 id 取消息与话题', () => {
   });
 });
 
-describe('推送里的撤回与编辑', () => {
-  test('同一条消息以撤回 / 编辑状态重推时带上标记，普通消息不带', async () => {
+describe('recalls and edits in pushes', () => {
+  test('a message re-pushed as recalled / edited carries the flag; regular messages do not', async () => {
     const { decodePushMessages } = await import('../src/proto/decoders.js');
     const got = decodePushMessages(
       pushFrame([
@@ -274,7 +274,7 @@ describe('推送里的撤回与编辑', () => {
   });
 });
 
-describe('表情事件', () => {
+describe('reaction events', () => {
   const reactionFrame = () => {
     const desc = larkType('reactions.PushReactions');
     const payload = toBinary(
@@ -308,7 +308,7 @@ describe('表情事件', () => {
     );
   };
 
-  test('推送 cmd=27 解出谁对哪条消息加了哪个表情，交给 onReaction', async () => {
+  test('push cmd=27 decodes who added which reaction to which message and hands it to onReaction', async () => {
     const server = Bun.serve({
       port: 0,
       fetch(req, srv) {

@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SQL } from 'bun';
 import type { LarkMessage } from '../src/proto/decoders.js';
-import { nowStamp, parseStorageUrl, Storage } from '../src/storage/index.js';
+import {
+  LEGACY_RECALLED,
+  nowStamp,
+  parseStorageUrl,
+  RECALLED,
+  Storage,
+} from '../src/storage/index.js';
 
 const msg = (over: Partial<LarkMessage> = {}): LarkMessage => ({
   msg_id: '7000000000000000001',
@@ -22,12 +28,12 @@ const msg = (over: Partial<LarkMessage> = {}): LarkMessage => ({
   cid: '',
   position: 5,
   create_time: 1_790_000_000,
-  content: '月报导出能加个按部门筛选吗',
+  content: 'Can the monthly report export filter by department?',
   content_data: { text: 'x', richText: { elementIds: ['1'] }, raw: new Uint8Array(3) },
   ...over,
 });
 
-test('连接串沿用 SQLAlchemy 写法', () => {
+test('connection strings use SQLAlchemy syntax', () => {
   expect(parseStorageUrl('sqlite:////abs/x.db')).toEqual({
     dialect: 'sqlite',
     url: 'sqlite:///abs/x.db',
@@ -36,10 +42,10 @@ test('连接串沿用 SQLAlchemy 写法', () => {
     dialect: 'mysql',
     url: 'mysql://u:p@h:3306/db',
   });
-  expect(() => parseStorageUrl('postgres://x')).toThrow('不支持的存储连接串');
+  expect(() => parseStorageUrl('postgres://x')).toThrow('unsupported storage URL: postgres://x');
 });
 
-test('时间戳格式与 SQLAlchemy 一致', () => {
+test('timestamp format matches SQLAlchemy', () => {
   expect(nowStamp(new Date(2026, 9, 13, 1, 2, 3, 45))).toBe('2026-10-13 01:02:03.045000');
 });
 
@@ -74,7 +80,7 @@ if (MYSQL_URL) {
 }
 
 for (const [name, setup] of backends) {
-  describe(`Storage（${name}）`, () => {
+  describe(`Storage (${name})`, () => {
     let st: Storage;
     let env: Env;
     beforeEach(async () => {
@@ -86,14 +92,14 @@ for (const [name, setup] of backends) {
       await env.cleanup();
     });
 
-    test('入库：content_data 按 Python 格式序列化，字节换成占位；会话记下名字与最新 position', async () => {
-      expect(await st.saveMessage(msg(), { senderName: '同事甲', chatName: '项目协作群' })).toBe(
-        true,
-      );
+    test('save: content_data serialized Python-style with bytes replaced by placeholders; chat records name and latest position', async () => {
+      expect(
+        await st.saveMessage(msg(), { senderName: 'Colleague A', chatName: 'Project team' }),
+      ).toBe(true);
       const [row] = await st.getMessages('7200000000000000001');
       expect(row).toMatchObject({
         msg_id: '7000000000000000001',
-        sender_name: '同事甲',
+        sender_name: 'Colleague A',
         position: 5,
         direction: 'in',
       });
@@ -105,26 +111,26 @@ for (const [name, setup] of backends) {
       const [chat] = await st.listChats();
       expect(chat).toMatchObject({
         chat_id: '7200000000000000001',
-        name: '项目协作群',
+        name: 'Project team',
         chat_type: 2,
         last_position: 5,
       });
     });
 
-    test('重复消息不再入库；先落库没有 position 的记录由回显补全并视作首次入库', async () => {
+    test('duplicates are not saved again; a row saved without position is completed by the echo and counts as a first save', async () => {
       expect(await st.saveMessage(msg({ position: null }), { direction: 'out' })).toBe(true);
       expect(await st.saveMessage(msg({ position: null }))).toBe(false);
       expect(
-        await st.saveMessage(msg({ position: 9, content: '回显' }), { direction: 'out' }),
+        await st.saveMessage(msg({ position: 9, content: 'echo' }), { direction: 'out' }),
       ).toBe(true);
       expect(await st.saveMessage(msg({ position: 9 }))).toBe(false);
       const rows = await st.getMessages('7200000000000000001');
       expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ position: 9, content: '回显' });
+      expect(rows[0]).toMatchObject({ position: 9, content: 'echo' });
       expect((await st.listChats())[0]?.last_position).toBe(9);
     });
 
-    test('按话题筛选、按时间倒序取最近 N 条后升序返回', async () => {
+    test('filter by topic; take the latest N by time and return them in ascending order', async () => {
       for (let i = 1; i <= 4; i++)
         await st.saveMessage(
           msg({ msg_id: `m${i}`, create_time: 1000 + i, anchor: i % 2 ? 't1' : '', position: i }),
@@ -144,7 +150,7 @@ for (const [name, setup] of backends) {
       expect(ids(await st.findMessages('m3'))).toEqual(['m3']);
     });
 
-    test('补收用的本地进度：会话最大 position（没有记录为 -1）与最近活跃的话题', async () => {
+    test('local catch-up progress: max position per chat (-1 when empty) and recently active topics', async () => {
       expect(await st.lastPosition('7200000000000000001')).toBe(-1);
       await st.saveMessage(msg({ msg_id: 'm1', position: 7 }));
       await st.saveMessage(
@@ -161,7 +167,7 @@ for (const [name, setup] of backends) {
       expect(await st.recentAnchors('7200000000000000001', 1)).toEqual(['r2']);
     });
 
-    test('撤回与编辑：只更新本地已有的消息', async () => {
+    test('recall and edit: only update messages already stored locally', async () => {
       await st.saveMessage(msg({ msg_id: 'm1' }));
       await st.saveMessage(msg({ msg_id: 'm2' }));
       expect(await st.markRecalled('m1', '7200000000000000001')).toBe(true);
@@ -169,7 +175,7 @@ for (const [name, setup] of backends) {
       expect(await st.markRecalled('m9', '7200000000000000001')).toBe(false);
       const edited = msg({
         msg_id: 'm2',
-        content: '月报导出能按部门和月份筛选吗',
+        content: 'Can the monthly report export filter by department and month?',
         content_data: { text: 'y' },
       });
       expect(await st.reviseMessage(edited)).toBe(true);
@@ -181,15 +187,24 @@ for (const [name, setup] of backends) {
           .map((r) => [r.msg_id, r.content, r.content_data])
           .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
       ).toEqual([
-        ['m1', '[已撤回]', ''],
-        ['m2', '月报导出能按部门和月份筛选吗', '{"text": "y"}'],
+        ['m1', '[Recalled]', ''],
+        ['m2', 'Can the monthly report export filter by department and month?', '{"text": "y"}'],
       ]);
+      expect(RECALLED).toBe('[Recalled]');
     });
 
-    test('会话名与 agent 会话', async () => {
-      await st.updateChatName('c1', '群一', 2);
-      await st.updateChatName('c1', '群一改名', 2);
-      expect(await st.getChatName('c1')).toBe('群一改名');
+    test('a row stored with the legacy recall marker counts as already recalled', async () => {
+      expect(LEGACY_RECALLED).toBe('[已撤回]');
+      await st.saveMessage(msg({ msg_id: 'm3', content: LEGACY_RECALLED }));
+      expect(await st.markRecalled('m3', '7200000000000000001')).toBe(false);
+      const [row] = await st.getMessages('7200000000000000001');
+      expect(row?.content).toBe(LEGACY_RECALLED);
+    });
+
+    test('chat names and agent sessions', async () => {
+      await st.updateChatName('c1', 'Group one', 2);
+      await st.updateChatName('c1', 'Group one renamed', 2);
+      expect(await st.getChatName('c1')).toBe('Group one renamed');
       await st.sessionUpsert('c1:', 'c1', '', 'sid-1', false);
       await st.sessionTouch('c1:');
       await st.sessionUpsert('c1:', 'c1', '', 'sid-1', true);

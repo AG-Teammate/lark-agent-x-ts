@@ -22,13 +22,13 @@ afterEach(() => {
   }
 });
 
-describe('配置', () => {
-  test('默认值与环境变量覆盖；空串视为未设置', () => {
+describe('config', () => {
+  test('defaults and environment overrides; empty string counts as unset', () => {
     process.env.LARKX_HOME = '/data/larkx';
     process.env.LARKX_REGION = 'lark';
     process.env.LARKX_MARK_READ = 'false';
     process.env.LARKX_STORAGE_URL = '';
-    process.env.LARKX_TRIGGER_KEYWORDS = '导出, 月报';
+    process.env.LARKX_TRIGGER_KEYWORDS = 'export, report';
     const cfg = loadConfig();
     expect(cfg).toMatchObject({
       region: 'lark',
@@ -37,21 +37,21 @@ describe('配置', () => {
       context_scope: 'anchor',
       agent_backend: 'claude',
     });
-    expect(cfg.triggers.keywords).toEqual(['导出', '月报']);
+    expect(cfg.triggers.keywords).toEqual(['export', 'report']);
     delete process.env.LARKX_MARK_READ;
     expect(loadConfig().mark_read).toBe(true);
   });
 
-  test('区域决定各接口的域名', () => {
+  test('region determines endpoint hosts', () => {
     const lark = getRegion('Lark');
     expect(urls.gateway(lark)).toBe('https://internal-api-lark-api.larksuite.com/im/gateway/');
     expect(urls.ws(getRegion('feishu'))).toBe('wss://msg-frontier.feishu.cn/ws/v2');
-    expect(() => getRegion('x')).toThrow("未知区域: 'x'");
+    expect(() => getRegion('x')).toThrow("unknown region: 'x' (valid: feishu, lark, lark-jp)");
   });
 });
 
-describe('会话归属与资源', () => {
-  test('scope/anchor：私聊不分话题；回复归到话题；话题群的根消息自成话题（系统消息除外）', () => {
+describe('chat scope and resources', () => {
+  test('scope/anchor: P2P chats have no topics; replies belong to a topic; root messages in thread groups form their own topic (except system messages)', () => {
     expect(resolveScope('m1', 4, 1, 'r1', 't1')).toEqual(['chat', '']);
     expect(resolveScope('m1', 4, 2, 'r1', 't1')).toEqual(['topic', 't1']);
     expect(resolveScope('m1', 4, 2, 'r1', '')).toEqual(['topic', 'r1']);
@@ -65,7 +65,7 @@ describe('会话归属与资源', () => {
     expect(enumToInt('12')).toBe(12);
   });
 
-  test('资源 key 与下载地址', () => {
+  test('resource keys and download URLs', () => {
     expect(extractResourceKey(5, { imageV2: { imageKey: 'img_v3_a' } })).toBe('img_v3_a');
     expect(extractResourceKey(5, { image: { origin: { key: 'img_o' } } })).toBe('img_o');
     expect(extractResourceKey(3, { key: 'file_v3_x' })).toBe('file_v3_x');

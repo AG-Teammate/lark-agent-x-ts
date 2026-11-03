@@ -54,7 +54,13 @@ export interface AgentSessionRow {
 type Dialect = 'sqlite' | 'mysql';
 
 /** Content stored in the DB for recalled messages. */
-export const RECALLED = '[已撤回]';
+export const RECALLED = '[Recalled]';
+/** Recalled marker written by older versions; still recognised when reading. */
+export const LEGACY_RECALLED = '[已撤回]';
+
+/** Whether stored content is a recall marker (current or legacy). */
+export const isRecalled = (content: string | null | undefined): boolean =>
+  content === RECALLED || content === LEGACY_RECALLED;
 
 /** SQLAlchemy-style connection string → Bun.SQL connection string and dialect. */
 export function parseStorageUrl(url: string): { dialect: Dialect; url: string } {
@@ -67,7 +73,7 @@ export function parseStorageUrl(url: string): { dialect: Dialect; url: string } 
   }
   const mysql = /^mysql(?:\+\w+)?:\/\/(.*)$/.exec(url);
   if (mysql) return { dialect: 'mysql', url: `mysql://${mysql[1]}` };
-  throw new Error(`不支持的存储连接串: ${url}(支持 sqlite:/// 与 mysql://)`);
+  throw new Error(`unsupported storage URL: ${url} (supported: sqlite:/// and mysql://)`);
 }
 
 /** Format SQLAlchemy uses to write DateTime: local time `YYYY-MM-DD HH:MM:SS.ffffff`. */
@@ -266,7 +272,7 @@ export class Storage {
     });
   }
 
-  /** A locally stored message was recalled: replace its content with "[已撤回]". Returns whether it existed locally (and was not already marked). */
+  /** A locally stored message was recalled: replace its content with RECALLED. Returns whether it existed locally (and was not already marked). */
   async markRecalled(msgId: string, chatId: string): Promise<boolean> {
     await this.init();
     return this.sql.begin(async (tx) => {
@@ -275,7 +281,7 @@ export class Storage {
           MessageRow,
           'id' | 'content'
         >[];
-      if (!row || row.content === RECALLED) return false;
+      if (!row || isRecalled(row.content)) return false;
       await tx`UPDATE messages SET content = ${RECALLED}, content_data = '' WHERE id = ${row.id}`;
       return true;
     });

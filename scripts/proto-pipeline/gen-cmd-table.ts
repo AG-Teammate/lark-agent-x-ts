@@ -29,14 +29,14 @@ for (const r of Object.keys(raw)) {
 rows.sort((a, b) => a.cmd - b.cmd);
 
 const lines = [
-  '# 飞书网页客户端接口 (cmd) 映射表',
+  '# Feishu web client endpoint (cmd) table',
   '',
-  '> 来源：web-client-next worklet bundles (2026-07-25, sdk 7.72.8)。',
-  '> 格式 A: `cmd|请求proto|响应proto`；格式 B: `cmd||推送proto||推送名`；格式 C: `cmd|请求|响应|1|名称`。',
-  '> 同名 cmd 在不同业务命名空间可能复用（推送类 cmd 与请求类 cmd 不冲突）。',
+  '> Source: web-client-next worklet bundles (2026-07-25, sdk 7.72.8).',
+  '> Format A: `cmd|request proto|response proto`; format B: `cmd||push proto||push name`; format C: `cmd|request|response|1|name`.',
+  '> The same cmd number may be reused across business namespaces (push cmds and request cmds do not collide).',
   '',
-  '| cmd | 请求 | 响应/推送 | 名称 |',
-  '|----:|------|-----------|------|',
+  '| cmd | request | response/push | name |',
+  '|----:|---------|---------------|------|',
   ...rows.map((r) => `| ${r.cmd} | ${r.req} | ${r.resp} | ${r.name} |`),
 ];
 ensureDir(OUT_DIR);

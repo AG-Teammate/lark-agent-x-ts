@@ -113,11 +113,11 @@ export function resolveScope(
 }
 
 const TAG_PLACEHOLDERS: Record<number, string> = {
-  2: '[图片]',
+  2: '[Image]',
   5: '[@]',
-  10: '[表情]',
-  18: '[视频]',
-  22: '[文档]',
+  10: '[Sticker]',
+  18: '[Video]',
+  22: '[Doc]',
 };
 
 /** Flatten rich text to plain text: text-like elements give their content, paragraphs end with a newline, @ gives the display name, everything else gets a placeholder. */
@@ -197,7 +197,7 @@ export function decodeMessageContent(
       case 2: {
         const d = parse('PostContent', content);
         const text = extractRichText(d.richText as Dict | undefined) || str(d.text);
-        return [`[富文本] ${str(d.title)}\n${text}`.trim(), d];
+        return [`[Rich text] ${str(d.title)}\n${text}`.trim(), d];
       }
       case 5: {
         const d = parse('ImageContent', content);
@@ -213,58 +213,62 @@ export function decodeMessageContent(
               break;
             }
           }
-          const crypto = 'crypto' in v2 ? ' 已加密' : '';
-          return [`[图片] imageKey=${str(v2.imageKey)} (${str(width)}x${str(height)})${crypto}`, d];
+          const crypto = 'crypto' in v2 ? ' encrypted' : '';
+          return [
+            `[Image] imageKey=${str(v2.imageKey)} (${str(width)}x${str(height)})${crypto}`,
+            d,
+          ];
         }
         const image = (d.image as Dict | undefined) ?? {};
         const img = (image.origin as Dict | undefined) ?? {};
         const key = img.key || image.key || image.imageKey || '';
         return [
-          `[图片] imageKey=${str(key)} (${str(img.width ?? '?')}x${str(img.height ?? '?')})`,
+          `[Image] imageKey=${str(key)} (${str(img.width ?? '?')}x${str(img.height ?? '?')})`,
           d,
         ];
       }
       case 3: {
         const d = parse('FileContent', content);
         return [
-          `[文件] ${str(d.name)} (${str(d.mime)}, ${str(d.size ?? 0)}字节, key=${str(d.key)})`,
+          `[File] ${str(d.name)} (${str(d.mime)}, ${str(d.size ?? 0)} bytes, key=${str(d.key)})`,
           d,
         ];
       }
       case 15: {
         const d = parse('MediaContent', content);
         return [
-          `[视频] ${str(d.name)} (时长${fmt1(d.duration)}s, ${str(d.size ?? 0)}字节, key=${str(d.key)})`,
+          `[Video] ${str(d.name)} (duration ${fmt1(d.duration)}s, ${str(d.size ?? 0)} bytes, key=${str(d.key)})`,
           d,
         ];
       }
       case 7: {
         const d = parse('AudioContent', content);
-        return [`[语音] 时长${fmt1(d.duration)}s, key=${str(d.key)}`, d];
+        return [`[Audio] duration ${fmt1(d.duration)}s, key=${str(d.key)}`, d];
       }
       case 10: {
         const d = parse('StickerContent', content);
-        return [`[表情包] stickerId=${str(d.stickerId)} key=${str(d.key)}`, d];
+        return [`[Sticker] stickerId=${str(d.stickerId)} key=${str(d.key)}`, d];
       }
       case 14: {
         const d = parse('CardContent', content);
         const header = (d.cardHeader as Dict | undefined) ?? {};
         const title = header.title || header.mainTitle || '';
         const jsonCard = str(d.jsonCard);
-        const parts = ['[卡片]'];
+        const parts = ['[Card]'];
         if (title) parts.push(str(title));
         if (d.cardDesc) parts.push(`(${str(d.cardDesc)})`);
         if (jsonCard) parts.push(head(jsonCard, 2000));
         else if (d.openCardContent)
-          parts.push(`<openCardContent ${(d.openCardContent as Uint8Array).length}字节>`);
+          parts.push(`<openCardContent ${(d.openCardContent as Uint8Array).length} bytes>`);
         return [parts.join(' '), d];
       }
       case 11: {
         const d = parse('MergeForwardContent', content);
         const msgs = (d.messages as Dict[] | undefined) ?? [];
         const name =
-          str(d.groupChatName) || `${str(d.p2pCreatorName)}与${str(d.p2pPartnerName)}的会话`;
-        const lines = [`[合并转发] ${name} 共${msgs.length}条:`];
+          str(d.groupChatName) ||
+          `chat between ${str(d.p2pCreatorName)} and ${str(d.p2pPartnerName)}`;
+        const lines = [`[Merged forward] ${name}, ${msgs.length} messages:`];
         for (const m of msgs.slice(0, 20)) {
           const [sub] = decodeMessageContent(
             enumToInt(m.type ?? 0),
@@ -278,7 +282,7 @@ export function decodeMessageContent(
         const d = parse('LocationContent', content);
         const desc = (d.locationDescription as Dict | undefined) ?? {};
         return [
-          `[位置] ${str(desc.name)} ${str(desc.description)} (${str(d.latitude)},${str(d.longitude)})`,
+          `[Location] ${str(desc.name)} ${str(desc.description)} (${str(d.latitude)},${str(d.longitude)})`,
           d,
         ];
       }
@@ -290,42 +294,42 @@ export function decodeMessageContent(
             if (item.text) texts.push(str(item.text));
           }
         }
-        return [`[系统消息] type=${str(d.typeNum || d.type)} ${texts.join(' ')}`, d];
+        return [`[System message] type=${str(d.typeNum || d.type)} ${texts.join(' ')}`, d];
       }
       case 23: {
         const d = parse('ShareUserCardContent', content);
-        return [`[名片] ${str(d.name)} (userId=${str(d.userId)})`, d];
+        return [`[Contact card] ${str(d.name)} (userId=${str(d.userId)})`, d];
       }
       case 9: {
         const d = parse('ShareGroupChatContent', content);
         const chat = (d.chat as Dict | undefined) ?? {};
-        return [`[群分享] ${str(chat.name)} (chatId=${str(d.chatId || chat.id)})`, d];
+        return [`[Shared group] ${str(chat.name)} (chatId=${str(d.chatId || chat.id)})`, d];
       }
       case 16: {
         const d = parse('ShareCalendarEventContent', content);
-        return [`[分享日程] 参与人数=${str(d.attendeesCount ?? '?')}`, d];
+        return [`[Shared event] attendees=${str(d.attendeesCount ?? '?')}`, d];
       }
       case 17: {
         const d = parse('HongbaoContent', content);
-        return [`[红包] ${str(d.subject)}`, d];
+        return [`[Red packet] ${str(d.subject)}`, d];
       }
       case 12: {
         const d = parse('CalendarContent', content);
-        return [`[日历] ${str(d.calendar)}`, d];
+        return [`[Calendar] ${str(d.calendar)}`, d];
       }
       case 19: {
         const d = parse('VideoChatContent', content);
-        return [`[视频会议] ${str(get(d.meetingCard, 'topic'))}`, d];
+        return [`[Video meeting] ${str(get(d.meetingCard, 'topic'))}`, d];
       }
       case 8: {
         const d = parse('EmailContent', content);
-        return [`[邮件] ${str(d.title)} ${str(d.text)}`, d];
+        return [`[Email] ${str(d.title)} ${str(d.text)}`, d];
       }
     }
   } catch (err) {
-    return [`[${typeName(messageType)}消息解析失败: ${(err as Error).message}]`, null];
+    return [`[${typeName(messageType)} message: decode failed: ${(err as Error).message}]`, null];
   }
-  return [`[${typeName(messageType)}类型消息]`, null];
+  return [`[${typeName(messageType)} message]`, null];
 }
 
 /** Long-connection frame → [Frame dict, Packet dict]. */

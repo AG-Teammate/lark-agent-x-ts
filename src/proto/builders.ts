@@ -119,7 +119,7 @@ function fillRichBlocks(blocks: RichBlock[], innerText: string): RichTextInit {
     if ('link' in run) {
       const href = String(run.link.href);
       const content = String(run.link.text || run.link.href);
-      // Custom link text: the client uses isCustom/scene to decide to render it as text; otherwise it shows a "来自 xx 的消息链接" ("message link from xx") preview card
+      // Custom link text: the client uses isCustom/scene to decide to render it as text; otherwise it shows a "message link from xx" preview card
       const custom = content !== href ? { isCustom: true, scene: 3 } : {};
       const i = el(
         6,
@@ -159,7 +159,7 @@ function fillRichBlocks(blocks: RichBlock[], innerText: string): RichTextInit {
     }
     if (t === 'quote')
       return el(29, ((block as { blocks?: RichBlock[] }).blocks ?? []).map(blockEl));
-    throw new Error(`未知的富文本块类型: ${t}`);
+    throw new Error(`unknown rich text block type: ${t}`);
   };
   for (const b of blocks) rt.elementIds.push(blockEl(b));
   if (usedBold) {
@@ -278,7 +278,7 @@ export function buildRichMessagePacket(
 
 /**
  * Rich text (POST) message: content.text holds an HTML fragment directly, which the server parses into rich text elements.
- * Verified: only <p> and <a href> survive; <b>/<i> show as "当前版本不支持" ("not supported in this version") in the client, and lists/quotes are dropped. Use buildRichMessagePacket for structured content.
+ * Verified: only <p> and <a href> survive; <b>/<i> show as "not supported in this version" in the client, and lists/quotes are dropped. Use buildRichMessagePacket for structured content.
  */
 export function buildPostMessagePacket(html: string, t: Target, requestId: string, title = '') {
   return putMessage(2, t, { ...(title ? { title } : {}), text: html }, requestId);

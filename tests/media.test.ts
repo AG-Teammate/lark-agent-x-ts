@@ -13,7 +13,7 @@ const auth = {
   gatewayAppId: '1',
 } as unknown as LarkAuth;
 
-describe('上传图片与文件', () => {
+describe('image and file upload', () => {
   let server: ReturnType<typeof Bun.serve>;
   const seen: { path: string; cookie: string | null; field: string; name: string; size: number }[] =
     [];
@@ -55,7 +55,8 @@ describe('上传图片与文件', () => {
     server.stop(true);
   });
 
-  test('图片表单字段为 image，从纯文本响应里取 key；文件上传到会话并带回服务端记录', async () => {
+  test('image form field is image and the key comes from the plain-text response; files upload to the chat and return the server record', async () => {
+    // The CJK file name is deliberate: it checks that a non-ASCII name survives the multipart upload.
     expect(await uploadImage(auth, new Uint8Array(5), 'a.png')).toBe('img_v3_0001_aa-bb');
     expect(await uploadFile(auth, '7200000000000000001', new Uint8Array(7), '周报.txt')).toEqual({
       key: 'file_v3_0001_cc',
@@ -75,11 +76,11 @@ describe('上传图片与文件', () => {
     ]);
     fileReply = { status: 'fail', message: 'file too large' };
     await expect(uploadFile(auth, 'c1', new Uint8Array(1), 'x')).rejects.toThrow(
-      '文件上传失败: file too large',
+      'file upload failed: file too large',
     );
   });
 
-  test('sendMessage 发图片/文件：先上传，图片 key 放 cryptoToken，文件带名字、大小与类型', async () => {
+  test('sendMessage with image/file: uploads first, image key goes in cryptoToken, file carries name, size and type', async () => {
     const c = newClient();
     Object.assign(c.auth, auth);
     c.isThreadChat = async () => false;

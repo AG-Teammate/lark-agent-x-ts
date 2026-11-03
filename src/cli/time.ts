@@ -26,5 +26,7 @@ export function parseTimeArg(s: string, now = Date.now(), future = false): numbe
       Number(se),
     ).getTime();
   }
-  throw new Error(`无法识别的时间: ${s}(可用 30m/2h/3d/1w、2026-10-01、2026-10-01 09:30 或时间戳)`);
+  throw new Error(
+    `unrecognized time: ${s} (use 30m/2h/3d/1w, 2026-10-01, 2026-10-01 09:30, or a timestamp)`,
+  );
 }

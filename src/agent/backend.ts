@@ -65,9 +65,9 @@ export class ClaudeCodeBackend implements AgentBackend {
         );
       }
       renameSync(path, path.replace(/\.json$/, '.json.migrated'));
-      logger.info('已从 agent_sessions.json 迁移到 SQLite session 表');
+      logger.info('migrated agent_sessions.json to the SQLite session table');
     } catch (err) {
-      logger.warning(`agent_sessions.json 迁移失败(忽略): ${(err as Error).message}`);
+      logger.warning(`agent_sessions.json migration failed (ignored): ${(err as Error).message}`);
     }
   }
 
@@ -95,13 +95,13 @@ export class ClaudeCodeBackend implements AgentBackend {
     ];
     const flat = prompt.replaceAll('\n', ' ');
     logger.info(
-      `调 agent [${sessionKey}]: ${args.join(' ')} << ${head(flat, 300)}${Array.from(prompt).length > 300 ? '…' : ''}`,
+      `calling agent [${sessionKey}]: ${args.join(' ')} << ${head(flat, 300)}${Array.from(prompt).length > 300 ? '…' : ''}`,
     );
     let proc: Bun.Subprocess<'pipe', 'pipe', 'pipe'>;
     try {
       proc = Bun.spawn(args, { stdin: 'pipe', stdout: 'pipe', stderr: 'pipe', env: process.env });
     } catch {
-      logger.error('未找到 claude CLI,请确认已安装并在 PATH 中');
+      logger.error('claude CLI not found; make sure it is installed and on PATH');
       return '';
     }
     proc.stdin.write(prompt);
@@ -112,7 +112,7 @@ export class ClaudeCodeBackend implements AgentBackend {
       proc.exited,
     ]);
     if (code !== 0) {
-      logger.error(`agent 返回非零(${code}): ${head(err.trim(), 500)}`);
+      logger.error(`agent exited with non-zero code (${code}): ${head(err.trim(), 500)}`);
       return '';
     }
     if (!sess.started) await this.storage.sessionUpsert(sessionKey, chatId, anchor, sess.id, true);

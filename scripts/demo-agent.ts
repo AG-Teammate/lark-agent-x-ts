@@ -14,7 +14,7 @@ const { values } = parseArgs({
   options: { chat: { type: 'string' }, live: { type: 'boolean', default: false } },
 });
 if (!values.chat) {
-  console.error('用法: bun scripts/demo-agent.ts --chat <chat_id> [--live]');
+  console.error('usage: bun scripts/demo-agent.ts --chat <chat_id> [--live]');
   process.exit(2);
 }
 
@@ -34,16 +34,17 @@ const base: AgentMessage = {
   cid: '',
   position: 1,
   create_time: 1785003200,
-  content: '在吗?帮我验证下数字人链路:收到这条后回我一句"链路正常"就行',
+  content:
+    'Are you there? Help me check the digital twin pipeline: when you get this, just reply "pipeline OK"',
   content_data: null,
-  _chat_name: '演示会话',
-  _sender_name: '同事甲',
+  _chat_name: 'Demo chat',
+  _sender_name: 'Colleague A',
 };
 const cases: [string, AgentMessage][] = [
-  ['案例 1: 明确要求回复', base],
+  ['Case 1: explicit reply request', base],
   [
-    '案例 2: 纯寒暄(不该回)',
-    { ...base, msg_id: '7666600000000000002', content: '周末愉快呀~ 好好休息😄' },
+    'Case 2: small talk only (should not reply)',
+    { ...base, msg_id: '7666600000000000002', content: 'Have a nice weekend~ get some rest 😄' },
   ],
 ];
 
@@ -63,7 +64,10 @@ class SpyBackend implements AgentBackend {
 
 const backend = new SpyBackend(values.live ? await getBackend() : null);
 const dispatcher = new AgentDispatcher(backend, async (_chatId, text) => {
-  console.log('>>> reply_fn 被调用(agent 应自己执行 lark send,不该走到这里):', text);
+  console.log(
+    '>>> reply_fn called (the agent should run lark send itself and never reach this):',
+    text,
+  );
 });
 for (const [title, msg] of cases) {
   console.log(`${'='.repeat(20)} ${title} ${'='.repeat(20)}`);
@@ -72,5 +76,5 @@ for (const [title, msg] of cases) {
   await dispatcher.handleMessage('demo:final', msg);
   console.log();
 }
-console.log(`${'='.repeat(20)} 喂给 agent 的完整提示词(案例 1) ${'='.repeat(20)}`);
+console.log(`${'='.repeat(20)} full prompt fed to the agent (case 1) ${'='.repeat(20)}`);
 console.log(backend.prompts[0]);

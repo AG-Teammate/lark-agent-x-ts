@@ -15,13 +15,16 @@ import { asList } from './config.js';
 
 /** Groups are divided by their effect on the outside world; the order here is the listing order of `lark permissions`. */
 export const GROUPS = {
-  local: '只读本机数据(凭证状态、配置、本地消息库),不联网',
-  query: '只读飞书数据(消息、会话、成员、已读情况、翻译等),不留下别人看得见的变化',
-  outbound: '以本人身份发出新消息(发送、定时、转发)',
-  modify: '改动已有消息或别人看得见的状态(撤回、编辑、表情、Pin、标已读)',
-  organize: '只影响自己的整理(标记、会话置顶)',
-  manage: '群管理(建群、拉人、移出、改群名)',
-  system: '账号与进程级操作(登录、常驻接收、调任意网关接口、改权限)',
+  local: 'Read-only local data (credential status, config, local message store); no network',
+  query:
+    'Read-only Lark data (messages, chats, members, read status, translation, etc.); leaves no changes visible to others',
+  outbound: 'Send new messages as yourself (send, schedule, forward)',
+  modify:
+    'Change existing messages or state visible to others (recall, edit, reactions, pin, mark read)',
+  organize: 'Personal organization only (flags, pinned chats)',
+  manage: 'Group management (create groups, add/remove members, rename)',
+  system:
+    'Account- and process-level operations (login, long-running receive, raw gateway calls, permission changes)',
 } as const;
 
 export type Group = keyof typeof GROUPS;
@@ -143,7 +146,7 @@ function validate(rules: Rules, where: string): void {
   const unknown = [...rules.allow, ...rules.deny].filter((n) => !n || !known.has(n));
   if (unknown.length)
     throw new Error(
-      `${where}里有不认识的名字: ${unknown.join(', ')}(可用: *、分组 ${Object.keys(GROUPS).join('/')}、命令名或 命令.动作,见 README 的"命令权限")`,
+      `unknown names in ${where}: ${unknown.join(', ')} (valid: *, groups ${Object.keys(GROUPS).join('/')}, a command name, or command.action; see "Command permissions" in the README)`,
     );
 }
 
@@ -156,7 +159,9 @@ export class PermissionDenied extends Error {
     readonly rule: string,
     readonly source: string,
   ) {
-    super(`权限不允许执行 ${permission}(分组 ${PERMISSIONS[permission]}): ${source}里的 ${rule}`);
+    super(
+      `permission denied: ${permission} (group ${PERMISSIONS[permission]}) by rule ${rule} in ${source}`,
+    );
     this.name = 'PermissionDenied';
     this.group = PERMISSIONS[permission];
   }
@@ -174,10 +179,10 @@ function readAccounts(path: string): AccountRules {
   try {
     data = JSON.parse(readFileSync(path, 'utf8'));
   } catch (e) {
-    throw new Error(`读取权限文件 ${path} 失败: ${(e as Error).message}`);
+    throw new Error(`failed to read permissions file ${path}: ${(e as Error).message}`);
   }
   if (!data || typeof data !== 'object' || Array.isArray(data))
-    throw new Error(`权限文件 ${path} 应是 user_id → {allow, deny} 的对象`);
+    throw new Error(`permissions file ${path} must be an object mapping user_id → {allow, deny}`);
   const out: AccountRules = {};
   for (const [userId, r] of Object.entries(data as Record<string, Partial<Rules>>))
     out[userId] = { allow: (r?.allow ?? []).map(String), deny: (r?.deny ?? []).map(String) };
@@ -197,13 +202,13 @@ export function loadRules(auth: LarkAuth): EffectiveRules {
   const path = permissionsPath(auth);
   const own = auth.userId ? readAccounts(path)[auth.userId] : undefined;
   const eff: EffectiveRules = own
-    ? { rules: own, source: `账号 ${auth.userId} 的规则(${path})`, own: true }
+    ? { rules: own, source: `rules for account ${auth.userId} (${path})`, own: true }
     : {
         rules: {
           allow: asList(process.env.LARKX_ALLOW ?? ''),
           deny: asList(process.env.LARKX_DENY ?? ''),
         },
-        source: '全局规则(LARKX_ALLOW / LARKX_DENY)',
+        source: 'global rules (LARKX_ALLOW / LARKX_DENY)',
         own: false,
       };
   validate(eff.rules, eff.source);
@@ -212,8 +217,9 @@ export function loadRules(auth: LarkAuth): EffectiveRules {
 
 /** Set the account's own rules (clears them when `rules` is null). */
 export function saveAccountRules(auth: LarkAuth, rules: Rules | null): void {
-  if (!auth.userId) throw new Error('凭证里没有 user_id,跟随账号的规则需要先登录');
-  if (rules) validate(rules, '要保存的规则');
+  if (!auth.userId)
+    throw new Error('no user_id in credentials; log in before setting per-account rules');
+  if (rules) validate(rules, 'the rules to save');
   const path = permissionsPath(auth);
   const accounts = readAccounts(path);
   if (rules) accounts[auth.userId] = rules;
@@ -231,7 +237,7 @@ export type PermissionSource = true | Rules;
 /** Throws PermissionDenied when not allowed. */
 export function authorize(auth: LarkAuth, source: PermissionSource, p: Permission): void {
   const eff: Pick<EffectiveRules, 'rules' | 'source'> =
-    source === true ? loadRules(auth) : { rules: source, source: '传入的规则' };
+    source === true ? loadRules(auth) : { rules: source, source: 'the supplied rules' };
   const v = decide(eff.rules, p);
   if (!v.allowed) throw new PermissionDenied(p, v.rule as string, eff.source);
 }
@@ -239,7 +245,7 @@ export function authorize(auth: LarkAuth, source: PermissionSource, p: Permissio
 /** When enabling, validate the rules once so misconfiguration fails early. */
 export function checkSource(auth: LarkAuth, source: PermissionSource): void {
   if (source === true) loadRules(auth);
-  else validate(source, '传入的规则');
+  else validate(source, 'the supplied rules');
 }
 
 const guarding = new AsyncLocalStorage<true>();

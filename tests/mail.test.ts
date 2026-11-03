@@ -45,14 +45,14 @@ const settings: Handler = () => ({
   setting: {
     emailAlias: {
       defaultAddress: {
-        name: '本人',
+        name: 'Me',
         address: ME,
         larkEntityId: '7100000000000000009',
         larkEntityType: 1,
       },
       allAddresses: [
-        { name: '本人', address: ME },
-        { name: '本人', address: ME_ALIAS },
+        { name: 'Me', address: ME },
+        { name: 'Me', address: ME_ALIAS },
       ],
     },
   },
@@ -140,9 +140,9 @@ describe('mail helpers', () => {
       {
         replyToMessageBizId: M2,
         content: {
-          from: { displayName: '同事甲', address: PEER },
-          to: [{ name: '本人', address: ME }],
-          subject: '周报',
+          from: { displayName: 'Colleague A', address: PEER },
+          to: [{ name: 'Me', address: ME }],
+          subject: 'Weekly report',
           bodyPlaintext: 'body',
           attachments: [{ fileName: 'a.txt', fileKey: 'box_0001', fileSize: '12' }],
         },
@@ -155,8 +155,8 @@ describe('mail helpers', () => {
       labels: ['INBOX', 'UNREAD'],
       draft: false,
       createdAt: 1_790_000_000_000,
-      from: { name: '同事甲', address: PEER },
-      to: [{ name: '本人', address: ME }],
+      from: { name: 'Colleague A', address: PEER },
+      to: [{ name: 'Me', address: ME }],
       cc: [],
       summary: 'body',
       attachments: [{ name: 'a.txt', fileKey: 'box_0001', size: 12 }],
@@ -448,7 +448,7 @@ describe('mail compose', () => {
     const r = await c.mail.send({
       to: [PEER],
       cc: [OTHER],
-      subject: '周报',
+      subject: 'Weekly report',
       text: 'line 1\nline 2',
     });
     expect(r).toEqual({ messageId: M3, threadId: T2 });
@@ -461,11 +461,11 @@ describe('mail compose', () => {
     expect(draftOf(sent[1] as Dict)).toEqual(draftOf(sent[0] as Dict));
     const content = contentOf(sent[0] as Dict);
     expect(content).toMatchObject({
-      from: { name: '本人', address: ME, larkEntityId: '7100000000000000009', larkEntityType: 1 },
+      from: { name: 'Me', address: ME, larkEntityId: '7100000000000000009', larkEntityType: 1 },
       to: [{ name: '', address: PEER, mailGroupType: 0 }],
       cc: [{ name: '', address: OTHER, mailGroupType: 0 }],
       bcc: [],
-      subject: '周报',
+      subject: 'Weekly report',
       bodyPlaintext: 'line 1\nline 2',
       attachments: [],
     });
@@ -477,10 +477,10 @@ describe('mail compose', () => {
     await c.mail.send({ to: [PEER], html: '<p>Hi&amp;bye</p>', from: ME_ALIAS.toUpperCase() });
     const content = contentOf(changes(calls)[0] as Dict);
     expect(content).toMatchObject({ bodyPlaintext: 'Hi&bye', bodyHtml: '<p>Hi&amp;bye</p>' });
-    expect(content.from).toEqual({ name: '本人', address: ME_ALIAS, mailGroupType: 0 });
+    expect(content.from).toEqual({ name: 'Me', address: ME_ALIAS, mailGroupType: 0 });
     expect(await c.mail.addresses()).toEqual([
-      { name: '本人', address: ME },
-      { name: '本人', address: ME_ALIAS },
+      { name: 'Me', address: ME },
+      { name: 'Me', address: ME_ALIAS },
     ]);
     await expect(c.mail.send({ to: [PEER], from: 'someone@example.org' })).rejects.toThrow(
       "Not one of this account's addresses: someone@example.org",
@@ -502,15 +502,15 @@ describe('mail compose', () => {
     full(
       { messageBizId: M1, threadBizId: T1, createdTime: { unit: 2, value: 1_790_000_000_000 } },
       {
-        from: { name: from === ME ? '本人' : '同事甲', address: from },
-        to: [{ name: '本人', address: from === ME ? PEER : ME }],
+        from: { name: from === ME ? 'Me' : 'Colleague A', address: from },
+        to: [{ name: 'Me', address: from === ME ? PEER : ME }],
         cc: [
-          { name: '同事乙', address: OTHER },
-          { name: '本人', address: ME_ALIAS },
+          { name: 'Colleague B', address: OTHER },
+          { name: 'Me', address: ME_ALIAS },
         ],
-        subject: '项目进展',
+        subject: 'Project update',
         bodyHtml: '<div>original</div>',
-        attachments: [{ fileName: '方案.pdf', fileKey: 'box_0001', fileSize: 2048 }],
+        attachments: [{ fileName: 'proposal.pdf', fileKey: 'box_0001', fileSize: 2048 }],
         ...over,
       },
     );
@@ -525,7 +525,7 @@ describe('mail compose', () => {
     const content = contentOf(save);
     expect(content.to).toEqual([{ name: '', address: PEER, mailGroupType: 0 }]);
     expect(content.cc).toEqual([]);
-    expect(content.subject).toBe('Re: 项目进展');
+    expect(content.subject).toBe('Re: Project update');
     expect(content.bodyPlaintext).toBe('thanks');
     expect(content.bodyHtml).toStartWith(textToHtml('thanks'));
     expect(content.bodyHtml).toContain('<blockquote');
@@ -533,12 +533,12 @@ describe('mail compose', () => {
     expect((draftOf(save).content as Dict).replyToMessageBizId).toBe(M1);
     expect((draftOf(save).meta as Dict).threadBizId).toBe(T1);
 
-    orig = original(PEER, { subject: 'RE: 项目进展' });
+    orig = original(PEER, { subject: 'RE: Project update' });
     calls.length = 0;
     await c.mail.reply(M1, { text: 'again', quote: false }, { draftOnly: true });
     const again = changes(calls);
     expect(again).toHaveLength(1);
-    expect(contentOf(again[0] as Dict).subject).toBe('RE: 项目进展');
+    expect(contentOf(again[0] as Dict).subject).toBe('RE: Project update');
     expect(contentOf(again[0] as Dict).bodyHtml).toBe(textToHtml('again'));
   });
 
@@ -578,13 +578,13 @@ describe('mail compose', () => {
     expect(r).toEqual({ messageId: M3, threadId: T2 });
     const save = changes(calls)[0] as Dict;
     const content = contentOf(save);
-    expect(content.subject).toBe('Fw: 项目进展');
+    expect(content.subject).toBe('Fw: Project update');
     expect(content.to).toEqual([{ name: '', address: OTHER, mailGroupType: 0 }]);
     expect(content.attachments).toEqual([
-      { fileName: '方案.pdf', fileKey: 'box_0001', type: 1, fileSize: 2048 },
+      { fileName: 'proposal.pdf', fileKey: 'box_0001', type: 1, fileSize: 2048 },
     ]);
     expect(content.bodyHtml).toContain('---------- Forwarded message ----------');
-    expect(content.bodyHtml).toContain(`From: 同事甲 &lt;${PEER}&gt;`);
+    expect(content.bodyHtml).toContain(`From: Colleague A &lt;${PEER}&gt;`);
     expect((draftOf(save).content as Dict).replyToMessageBizId).toBe(M1);
   });
 

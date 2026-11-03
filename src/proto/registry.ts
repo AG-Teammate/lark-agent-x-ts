@@ -22,14 +22,14 @@ let allReg: Registry | undefined;
 export function protoType(name: string): DescMessage {
   protoReg ??= load('proto.binpb');
   const t = protoReg.getMessage(name);
-  if (!t) throw new Error(`未知类型: ${name}`);
+  if (!t) throw new Error(`unknown type: ${name}`);
   return t;
 }
 
 export function protoEnum(name: string): DescEnum {
   protoReg ??= load('proto.binpb');
   const t = protoReg.getEnum(name);
-  if (!t) throw new Error(`未知枚举: ${name}`);
+  if (!t) throw new Error(`unknown enum: ${name}`);
   return t;
 }
 
@@ -43,7 +43,7 @@ export function larkType(name: string): DescMessage {
   coreReg ??= load('core.binpb');
   const full = `lark.${name}`;
   const t = coreReg.getMessage(full) ?? fullRegistry().getMessage(full);
-  if (!t) throw new Error(`未知类型: ${name}`);
+  if (!t) throw new Error(`unknown type: ${name}`);
   return t;
 }
 
@@ -83,7 +83,8 @@ export function resolveCmd(typeOrCmd: string | number): ResolvedCmd {
     return { cmd, req: null, resp };
   }
   const entry = cmds().by_req[typeOrCmd];
-  if (!entry) throw new Error(`cmd 映射里没有 ${typeOrCmd}(查 docs/cmd_table.md 确认名字)`);
+  if (!entry)
+    throw new Error(`${typeOrCmd} is not in the cmd map (check the name in docs/cmd_table.md)`);
   return {
     cmd: entry.cmd,
     req: entry.push ? null : larkType(typeOrCmd),

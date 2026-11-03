@@ -4,36 +4,43 @@ import { entity, newClient } from './helpers.js';
 
 const ME = '7100000000000000009';
 
-describe('未读与 @我', () => {
-  test('未读会话：只留有未读消息或新话题的', async () => {
+describe('unread and @me', () => {
+  test('unread chats: keep only chats with unread messages or new topics', async () => {
     const c = newClient();
     c.recentChats = async () => [
       {
         chatId: 'g1',
         updatedAt: 3,
-        chat: { name: '项目协作群', type: 2, chatMode: 1, newMessageCount: 2 },
+        chat: { name: 'Project team', type: 2, chatMode: 1, newMessageCount: 2 },
       },
-      { chatId: 'g2', updatedAt: 2, chat: { name: '已读群', type: 2, newMessageCount: 0 } },
+      { chatId: 'g2', updatedAt: 2, chat: { name: 'Read group', type: 2, newMessageCount: 0 } },
       {
         chatId: 't1',
         updatedAt: 1,
-        chat: { name: '话题群', type: 2, chatMode: 3, newThreadCount: 1 },
+        chat: { name: 'Thread group', type: 2, chatMode: 3, newThreadCount: 1 },
       },
     ];
     expect(await c.unreadChats()).toEqual([
       {
         chatId: 'g1',
-        name: '项目协作群',
+        name: 'Project team',
         chatType: 2,
         threadChat: false,
         unread: 2,
         unreadThreads: 0,
       },
-      { chatId: 't1', name: '话题群', chatType: 2, threadChat: true, unread: 0, unreadThreads: 1 },
+      {
+        chatId: 't1',
+        name: 'Thread group',
+        chatType: 2,
+        threadChat: true,
+        unread: 0,
+        unreadThreads: 1,
+      },
     ]);
   });
 
-  test('普通会话从已读位置之后拉，去掉自己发的与撤回的，按被 @ 名单算 at_me', async () => {
+  test('regular chats pull after the read position, drop own and recalled messages, and compute at_me from the @ list', async () => {
     const c = newClient();
     Object.assign(c.auth, { userId: ME });
     c.getChatInfo = async () => ({
@@ -58,7 +65,7 @@ describe('未读与 @我', () => {
     expect(got.map((m) => [m.msg_id, m.at_me])).toEqual([['7000000000000000011', true]]);
   });
 
-  test('话题群：已读话题位置之后的新话题，加上话题里已读位置之后的回复', async () => {
+  test("thread groups: new topics after the read topic position, plus replies after each topic's read position", async () => {
     const c = newClient();
     Object.assign(c.auth, { userId: ME });
     c.getChatInfo = async () => ({
@@ -100,7 +107,7 @@ describe('未读与 @我', () => {
     });
   });
 
-  test('unreadMentions 只留 @我 的', async () => {
+  test('unreadMentions keeps only messages that @me', async () => {
     const c = newClient();
     c.unreadChats = async () => [
       { chatId: 'g1', name: '', chatType: 2, threadChat: false, unread: 1, unreadThreads: 0 },

@@ -14,7 +14,13 @@ function topUsage(): string {
 }
 
 function topHelp(): string {
-  const lines = [topUsage(), '', '飞书 / Lark 网页版消息通道 CLI', '', 'positional arguments:'];
+  const lines = [
+    topUsage(),
+    '',
+    'messaging channel CLI for the Feishu / Lark web client',
+    '',
+    'positional arguments:',
+  ];
   lines.push(`  {${COMMANDS.map((c) => c.name).join(',')}}`);
   for (const c of COMMANDS) lines.push(`    ${c.name.padEnd(20)}${c.help}`);
   lines.push('', 'options:', '  -h, --help            show this help message and exit');

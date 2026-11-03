@@ -46,7 +46,7 @@ export class LarkAuth {
       this.webAppId = String(data.web_app_id ?? '');
       return Object.keys(this.cookies).length > 0;
     } catch (err) {
-      logger.warning(`读取凭证文件失败: ${(err as Error).message}`);
+      logger.warning(`failed to read credentials file: ${(err as Error).message}`);
       return false;
     }
   }
@@ -64,7 +64,7 @@ export class LarkAuth {
       web_app_id: this.webAppId,
     };
     writeFileSync(this.path, pyDumps(data, { indent: 2 }), 'utf8');
-    logger.info(`凭证已保存到 ${this.path}`);
+    logger.info(`credentials saved to ${this.path}`);
   }
 
   get gatewayAppId(): string {
@@ -98,15 +98,16 @@ export class LarkAuth {
       if (eq < 0) continue;
       cookies[part.slice(0, eq)] = part.slice(eq + 1);
     }
-    if (!('session' in cookies)) throw new Error('cookie 中缺少 session,请确认复制完整');
+    if (!('session' in cookies))
+      throw new Error('cookie has no session; make sure you copied all of it');
     const [ok, msg] = await this.adoptCookies(cookies, region ?? this.region);
-    if (!ok) throw new AuthExpired(`导入的 cookie 校验失败: ${msg}`);
+    if (!ok) throw new AuthExpired(`imported cookie failed validation: ${msg}`);
     return msg;
   }
 
   /** Online check: valid if a long-connection ticket can be obtained. fetchProfile also fills in user_id, app_key and web_app_id. */
   async validate(fetchProfile = false): Promise<[boolean, string]> {
-    if (!this.hasCredentials) return [false, '无凭证,请先 lark auth import'];
+    if (!this.hasCredentials) return [false, 'no credentials; run lark auth import first'];
     if (!this.deviceId) this.deviceId = this.cookies.passport_web_did ?? '';
     try {
       const res = await request(urls.ticket(this.region), {
@@ -119,14 +120,17 @@ export class LarkAuth {
         const reason = String(j.message ?? JSON.stringify(j));
         return [
           false,
-          `会话已被服务端注销(凭证保存于 ${ageHours(this.savedAt)}h 前): ${reason}\n请重新登录: lark auth qr 或 lark auth import`,
+          `session revoked by server (credentials saved ${ageHours(this.savedAt)}h ago): ${reason}\nlog in again: lark auth qr or lark auth import`,
         ];
       }
     } catch (err) {
-      return [false, `ticket 探针网络异常(先检查网络,不一定是凭证问题): ${(err as Error).message}`];
+      return [
+        false,
+        `ticket probe network error (check your network; credentials may be fine): ${(err as Error).message}`,
+      ];
     }
     if (fetchProfile) await this.fetchProfile();
-    return [true, `有效(user_id=${this.userId || '?'}, 已保存 ${ageHours(this.savedAt)}h)`];
+    return [true, `valid (user_id=${this.userId || '?'}, saved ${ageHours(this.savedAt)}h ago)`];
   }
 
   async fetchProfile(): Promise<void> {
@@ -151,7 +155,7 @@ export class LarkAuth {
       const j = (await res.json()) as { data: { user: { id: unknown } } };
       this.userId = String(j.data.user.id);
     } catch (err) {
-      logger.warning(`获取用户信息失败: ${(err as Error).message}`);
+      logger.warning(`failed to fetch user profile: ${(err as Error).message}`);
     }
     if (!this.appKey || !this.webAppId) {
       try {
@@ -162,25 +166,26 @@ export class LarkAuth {
         const text = await res.text();
         const key = /appKey: "(.*?)"/.exec(text);
         if (key) this.appKey = key[1] as string;
-        else logger.warning('appKey 抓取失败: 页面里没有 appKey(UA/页面结构变化?)');
+        else logger.warning('appKey scrape failed: no appKey in page (UA or page layout changed?)');
         const tea = /teaAppId["']?\s*:\s*["']?(\d+)/.exec(text);
         if (tea) this.webAppId = tea[1] as string;
         else
           logger.debug(
-            `页面里没有 teaAppId,x-appid 沿用 ${this.region.name} 默认值 ${this.region.webAppId}`,
+            `no teaAppId in page; x-appid falls back to the ${this.region.name} default ${this.region.webAppId}`,
           );
       } catch (err) {
-        logger.warning(`获取 appKey 失败: ${(err as Error).message}`);
+        logger.warning(`failed to fetch appKey: ${(err as Error).message}`);
       }
     }
-    if (!this.appKey) logger.error('app_key 为空,WS 会被拒(access_key 无法计算)');
+    if (!this.appKey)
+      logger.error('app_key is empty; WS will be rejected (cannot compute access_key)');
   }
 
   async requireValid(): Promise<string> {
     const [ok, msg] = await this.validate();
     if (!ok)
       throw new AuthExpired(
-        `凭证已过期或无效: ${msg}\n请从浏览器重新复制 cookie 后执行: lark auth import`,
+        `credentials expired or invalid: ${msg}\ncopy the cookie from your browser again and run: lark auth import`,
       );
     return msg;
   }
@@ -193,7 +198,7 @@ export class LarkAuth {
       timeoutMs: 10_000,
     });
     const j = (await res.json()) as Record<string, unknown>;
-    if (!j.ticket) throw new AuthExpired(`获取 ticket 失败: ${JSON.stringify(j)}`);
+    if (!j.ticket) throw new AuthExpired(`failed to get ticket: ${JSON.stringify(j)}`);
     return String(j.ticket);
   }
 
@@ -213,11 +218,11 @@ export class LarkAuth {
 
 export const QR_STATUS_NAMES: Record<number, string> = {
   0: 'SUCCESS',
-  1: '等待扫码',
-  2: '已扫码待确认',
-  3: '已取消',
-  4: '错误',
-  5: '已过期',
+  1: 'waiting for scan',
+  2: 'scanned, awaiting confirmation',
+  3: 'cancelled',
+  4: 'error',
+  5: 'expired',
 };
 
 /** QR login: init gets the QR token, then polls until login completes and hands the session cookies to LarkAuth. */
@@ -233,7 +238,7 @@ export class QrLogin {
     const ql = new QrLogin(region);
     const res = await ql.post('/accounts/qrlogin/init', { redirect_uri: urls.qrRedirect(region) });
     const j = (await res.json()) as { code?: number; data?: { step_info?: { token?: string } } };
-    if (j.code !== 0) throw new AuthExpired(`qr init 失败: ${JSON.stringify(j)}`);
+    if (j.code !== 0) throw new AuthExpired(`QR init failed: ${JSON.stringify(j)}`);
     ql.flowKey = res.headers.get('x-flow-key') ?? '';
     ql.token = j.data?.step_info?.token ?? '';
     ql.qrContent = JSON.stringify({ qrlogin: { token: ql.token } });
@@ -288,9 +293,10 @@ export class QrLogin {
 
   async finish(auth: LarkAuth): Promise<string> {
     const cookies = { ...this.jar.cookies };
-    if (!('session' in cookies)) throw new AuthExpired('登录流程结束但未拿到 session cookie');
+    if (!('session' in cookies))
+      throw new AuthExpired('login flow finished without a session cookie');
     const [ok, msg] = await auth.adoptCookies(cookies, this.region);
-    if (!ok) throw new AuthExpired(`登录成功但凭证校验失败: ${msg}`);
+    if (!ok) throw new AuthExpired(`login succeeded but credential validation failed: ${msg}`);
     return msg;
   }
 }

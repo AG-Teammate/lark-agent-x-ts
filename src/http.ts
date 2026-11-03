@@ -18,7 +18,7 @@ export class HttpError extends Error {
   }
 }
 
-/** Network-layer errors such as connection failures and timeouts; the message contains "网络" ("network") so callers can tell network problems from credential problems. */
+/** Network-layer errors such as connection failures and timeouts; the message starts with "Network request failed" so callers can tell network problems from credential problems. */
 export class NetworkError extends Error {}
 
 export const cookieHeader = (cookies: Record<string, string>): string =>
@@ -53,7 +53,7 @@ export async function request(url: string, o: RequestOptions = {}): Promise<Resp
     const e = err as Error;
     const reason =
       e.name === 'TimeoutError' ? `Read timed out (${o.timeoutMs ?? 15_000}ms)` : e.message;
-    throw new NetworkError(`网络请求失败(${u.host}): ${reason}`);
+    throw new NetworkError(`Network request failed (${u.host}): ${reason}`);
   }
 }
 
@@ -121,6 +121,6 @@ export class CookieJar {
         opts = rest;
       }
     }
-    throw new NetworkError(`网络请求失败(${new URL(url).host}): 重定向次数过多`);
+    throw new NetworkError(`Network request failed (${new URL(url).host}): too many redirects`);
   }
 }

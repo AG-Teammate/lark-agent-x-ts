@@ -1,136 +1,136 @@
 {
   "contents": [
     {
-      "name": "文本+@",
+      "name": "text + @",
       "type": 4,
       "bytes": "GrkBCgExCgEyCgEzEjjmnIjmiqXlr7zlh7rog73liqDkuKrmjInpg6jpl6jnrZvpgInlkJdA5ZCM5LqL5LmZIOiwouiwohp0CioKATISJQgFGiEKEzcxMDAwMDAwMDAwMDAwMDAwMDISCkDlkIzkuovkuZkKMgoBMRItCAEaKQon5pyI5oql5a+85Ye66IO95Yqg5Liq5oyJ6YOo6Zeo562b6YCJ5ZCXChIKATMSDQgBGgkKByDosKLosKI=",
       "summary": "月报导出能加个按部门筛选吗@同事乙 谢谢",
       "content_data": "{\"richText\": {\"elementIds\": [\"1\", \"2\", \"3\"], \"innerText\": \"月报导出能加个按部门筛选吗@同事乙 谢谢\", \"elements\": {\"dictionary\": {\"3\": {\"tag\": 1, \"property\": \"<9 bytes>\"}, \"1\": {\"tag\": 1, \"property\": \"<41 bytes>\"}, \"2\": {\"tag\": 5, \"property\": \"<33 bytes>\"}}}}}"
     },
     {
-      "name": "纯文本",
+      "name": "plain text",
       "type": 4,
       "bytes": "Cgnnuq/mlofmnKw=",
       "summary": "纯文本",
       "content_data": "{\"text\": \"纯文本\"}"
     },
     {
-      "name": "段落+占位",
+      "name": "paragraphs + placeholders",
       "type": 4,
       "bytes": "GksKATEKATIKATMKATQaPQoMCgEyEgcIAhoDCgF4ChQKATESDwgDGgsKCeesrOS4gOautQoJCgE0EgQIBRoACgwKATMSBwgKGgMKAXk=",
-      "summary": "第一段\n[图片][表情]",
+      "summary": "第一段\n[Image][Sticker]",
       "content_data": "{\"richText\": {\"elementIds\": [\"1\", \"2\", \"3\", \"4\"], \"elements\": {\"dictionary\": {\"4\": {\"tag\": 5, \"property\": \"<0 bytes>\"}, \"3\": {\"tag\": 10, \"property\": \"<3 bytes>\"}, \"1\": {\"tag\": 3, \"property\": \"<11 bytes>\"}, \"2\": {\"tag\": 2, \"property\": \"<3 bytes>\"}}}}}"
     },
     {
-      "name": "富文本",
+      "name": "rich text",
       "type": 2,
       "bytes": "CgblkajmiqUyRgoBMQoBMho+ChcKATISEggBGg4KDOS4i+WRqOiuoeWIkgojCgExEh4IAxoaChjmnKzlkajlrozmiJDmnIjmiqXlr7zlh7o=",
-      "summary": "[富文本] 周报\n本周完成月报导出\n下周计划",
+      "summary": "[Rich text] 周报\n本周完成月报导出\n下周计划",
       "content_data": "{\"title\": \"周报\", \"richText\": {\"elementIds\": [\"1\", \"2\"], \"elements\": {\"dictionary\": {\"1\": {\"tag\": 3, \"property\": \"<26 bytes>\"}, \"2\": {\"tag\": 1, \"property\": \"<14 bytes>\"}}}}}"
     },
     {
-      "name": "图片",
+      "name": "image",
       "type": 5,
       "bytes": "ChcSFQoNaW1nX3YzX29yaWdpbhiABSDgAw==",
-      "summary": "[图片] imageKey=img_v3_origin (640x480)",
+      "summary": "[Image] imageKey=img_v3_origin (640x480)",
       "content_data": "{\"image\": {\"origin\": {\"key\": \"img_v3_origin\", \"width\": 640, \"height\": 480}}}"
     },
     {
-      "name": "文件",
+      "name": "file",
       "type": 3,
       "bytes": "CglmaWxlX3YzX3gSC+aciOaKpS54bHN4GLlgIhhhcHBsaWNhdGlvbi92bmQubXMtZXhjZWw=",
-      "summary": "[文件] 月报.xlsx (application/vnd.ms-excel, 12345字节, key=file_v3_x)",
+      "summary": "[File] 月报.xlsx (application/vnd.ms-excel, 12345 bytes, key=file_v3_x)",
       "content_data": "{\"key\": \"file_v3_x\", \"name\": \"月报.xlsx\", \"size\": 12345, \"mime\": \"application/vnd.ms-excel\"}"
     },
     {
-      "name": "视频",
+      "name": "video",
       "type": 15,
       "bytes": "Cg1maWxlX3YzX21lZGlhEgrmvJTnpLoubXA0GOqtwOUkOLlg",
-      "summary": "[视频] 演示.mp4 (时长12.3s, 9876543210字节, key=file_v3_media)",
+      "summary": "[Video] 演示.mp4 (duration 12.3s, 9876543210 bytes, key=file_v3_media)",
       "content_data": "{\"key\": \"file_v3_media\", \"name\": \"演示.mp4\", \"size\": 9876543210, \"duration\": 12345}"
     },
     {
-      "name": "语音",
+      "name": "audio",
       "type": 7,
       "bytes": "Cg1maWxlX3YzX2F1ZGlvEKwb",
-      "summary": "[语音] 时长3.5s, key=file_v3_audio",
+      "summary": "[Audio] duration 3.5s, key=file_v3_audio",
       "content_data": "{\"key\": \"file_v3_audio\", \"duration\": 3500}"
     },
     {
-      "name": "表情包",
+      "name": "sticker",
       "type": 10,
       "bytes": "IgppbWdfdjNfc3RrUgVzdGtfMQ==",
-      "summary": "[表情包] stickerId=stk_1 key=img_v3_stk",
+      "summary": "[Sticker] stickerId=stk_1 key=img_v3_stk",
       "content_data": "{\"key\": \"img_v3_stk\", \"stickerId\": \"stk_1\"}"
     },
     {
-      "name": "卡片",
+      "name": "card",
       "type": 14,
       "bytes": "ogGQHHsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifXsidGl0bGUiOiLlrqHmibkifQ==",
-      "summary": "[卡片] {\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批",
+      "summary": "[Card] {\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批\"}{\"title\":\"审批",
       "content_data": "{\"jsonCard\": \"{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}{\\\"title\\\":\\\"审批\\\"}\"}"
     },
     {
-      "name": "合并转发",
+      "name": "merged forward",
       "type": 11,
       "bytes": "CiIQBBoTNzEwMDAwMDAwMDAwMDAwMDAwMCoJCgfnrKww5p2hCiIQBBoTNzEwMDAwMDAwMDAwMDAwMDAwMSoJCgfnrKwx5p2hGg/pobnnm67ljY/kvZznvqQ=",
-      "summary": "[合并转发] 项目协作群 共2条:\n  7100000000000000000: 第0条\n  7100000000000000001: 第1条",
+      "summary": "[Merged forward] 项目协作群, 2 messages:\n  7100000000000000000: 第0条\n  7100000000000000001: 第1条",
       "content_data": "{\"messages\": [{\"type\": 4, \"fromId\": \"7100000000000000000\", \"content\": \"<9 bytes>\"}, {\"type\": 4, \"fromId\": \"7100000000000000001\", \"content\": \"<9 bytes>\"}], \"groupChatName\": \"项目协作群\"}"
     },
     {
-      "name": "位置",
+      "name": "location",
       "type": 20,
       "bytes": "ChMKCeS8muiuruWupBIG5LiJ5qW8EggxMjEuNDczNxoHMzEuMjMwNA==",
-      "summary": "[位置] 会议室 三楼 (31.2304,121.4737)",
+      "summary": "[Location] 会议室 三楼 (31.2304,121.4737)",
       "content_data": "{\"locationDescription\": {\"name\": \"会议室\", \"description\": \"三楼\"}, \"longitude\": \"121.4737\", \"latitude\": \"31.2304\"}"
     },
     {
-      "name": "系统消息",
+      "name": "system message",
       "type": 6,
       "bytes": "MAdCGAoBYhITKhEaD+WKoOWFpeS6hue+pOiBikISCgFhEg0qCxoJ5ZCM5LqL55Sy",
-      "summary": "[系统消息] type=7 同事甲 加入了群聊",
+      "summary": "[System message] type=7 同事甲 加入了群聊",
       "content_data": "{\"typeNum\": 7, \"sysContentValues\": {\"a\": {\"items\": [{\"text\": \"同事甲\"}]}, \"b\": {\"items\": [{\"text\": \"加入了群聊\"}]}}}"
     },
     {
-      "name": "名片",
+      "name": "contact card",
       "type": 23,
       "bytes": "ChM3MTAwMDAwMDAwMDAwMDAwMDAyGgnlkIzkuovkuZk=",
-      "summary": "[名片] 同事乙 (userId=7100000000000000002)",
+      "summary": "[Contact card] 同事乙 (userId=7100000000000000002)",
       "content_data": "{\"userId\": \"7100000000000000002\", \"name\": \"同事乙\"}"
     },
     {
-      "name": "群分享",
+      "name": "shared group",
       "type": 9,
       "bytes": "CiYKEzcyMDAwMDAwMDAwMDAwMDAwMDEiD+mhueebruWNj+S9nOe+pA==",
-      "summary": "[群分享] 项目协作群 (chatId=7200000000000000001)",
+      "summary": "[Shared group] 项目协作群 (chatId=7200000000000000001)",
       "content_data": "{\"chat\": {\"id\": \"7200000000000000001\", \"name\": \"项目协作群\"}}"
     },
     {
-      "name": "红包",
+      "name": "red packet",
       "type": 17,
       "bytes": "Egzmga3llpzlj5HotKI=",
-      "summary": "[红包] 恭喜发财",
+      "summary": "[Red packet] 恭喜发财",
       "content_data": "{\"subject\": \"恭喜发财\"}"
     },
     {
-      "name": "邮件",
+      "name": "email",
       "type": 8,
       "bytes": "CgzlkajkvJrnuqropoESCeingemZhOS7tg==",
-      "summary": "[邮件] 周会纪要 见附件",
+      "summary": "[Email] 周会纪要 见附件",
       "content_data": "{\"title\": \"周会纪要\", \"text\": \"见附件\"}"
     },
     {
-      "name": "未知类型",
+      "name": "unknown type",
       "type": 24,
       "bytes": "",
-      "summary": "[TODO类型消息]",
+      "summary": "[TODO message]",
       "content_data": null
     },
     {
-      "name": "解析失败",
+      "name": "decode failure",
       "type": 4,
       "bytes": "////",
-      "summary": "[TEXT消息解析失败: Error parsing message with type 'TextContent']",
+      "summary": "[TEXT message: decode failed: Error parsing message with type 'TextContent']",
       "content_data": null
     }
   ],
@@ -179,7 +179,7 @@
   },
   "send": [
     {
-      "name": "文本",
+      "name": "text",
       "text": "收到",
       "chat": "c1",
       "root": null,
@@ -189,7 +189,7 @@
       "packet": "EAEYBSouCAQSInIgCgExEgbmlLbliLAaEwoRCgExEgwIARoICgbmlLbliLAaAmMxOAFIAQ=="
     },
     {
-      "name": "链接",
+      "name": "links",
       "text": "见[月报](https://example.com/r) 和 [x](http://y)",
       "chat": "c1",
       "root": null,
@@ -199,7 +199,7 @@
       "packet": "EAEYBSq+AQgEErEBcq4BCgExCgEyCgEzCgE0EjTop4Fb5pyI5oqlXShodHRwczovL2V4YW1wbGUuY29tL3IpIOWSjCBbeF0oaHR0cDovL3kpGmQKKAoBMhIjCAYaHwoVaHR0cHM6Ly9leGFtcGxlLmNvbS9yEgbmnIjmiqUKDgoBMRIJCAEaBQoD6KeBChAKATMSCwgBGgcKBSDlkowgChYKATQSEQgGGg0KCGh0dHA6Ly95EgF4OgEyOgE0GgJjMTgBSAE="
     },
     {
-      "name": "话题回复",
+      "name": "topic reply",
       "text": "好的",
       "chat": "c1",
       "root": "r1",
@@ -209,7 +209,7 @@
       "packet": "EAEYBSo4CAQSInIgCgExEgblpb3nmoQaEwoRCgExEgwIARoICgblpb3nmoQaAmMxIgJyMSoCcjE4AUgBYAE="
     },
     {
-      "name": "话题群回复",
+      "name": "thread-group reply",
       "text": "好的",
       "chat": "c1",
       "root": "r1",
@@ -219,7 +219,7 @@
       "packet": "EAEYBSo2CAQSInIgCgExEgblpb3nmoQaEwoRCgExEgwIARoICgblpb3nmoQaAmMxIgJyMSoCcjE4AUgB"
     },
     {
-      "name": "引用",
+      "name": "quote",
       "text": "好的",
       "chat": "c1",
       "root": null,
@@ -229,7 +229,7 @@
       "packet": "EAEYBSo2CAQSInIgCgExEgblpb3nmoQaEwoRCgExEgwIARoICgblpb3nmoQaAmMxIgJtMSoCbTE4AUgB"
     },
     {
-      "name": "话题内引用",
+      "name": "quote inside topic",
       "text": "好的",
       "chat": "c1",
       "root": "r1",

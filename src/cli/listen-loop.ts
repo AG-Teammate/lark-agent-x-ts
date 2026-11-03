@@ -40,16 +40,19 @@ export async function keepListening(
   const enqueue = (msg: LarkMessage) => {
     queue = queue
       .then(() => onMessage(msg))
-      .catch((e) => logger.error(`处理消息异常: ${errorText(e)}`));
+      .catch((e) => logger.error(`failed to handle message: ${errorText(e)}`));
     return queue;
   };
   const backfill = async (since: number) => {
     try {
       const missed = await o.missed(since);
       for (const msg of missed) await enqueue(msg);
-      if (missed.length) logger.info(`补收断线期间的消息 ${missed.length} 条(已收到的会去重)`);
+      if (missed.length)
+        logger.info(
+          `caught up on ${missed.length} messages missed while disconnected (duplicates are skipped)`,
+        );
     } catch (e) {
-      logger.warning(`补收断线期间的消息失败: ${errorText(e)}`);
+      logger.warning(`failed to catch up on messages missed while disconnected: ${errorText(e)}`);
     }
   };
   // Back off one heartbeat timeout from the disconnect time: the connection may have dropped before it was noticed
@@ -65,10 +68,12 @@ export async function keepListening(
     try {
       await c.connectWebsocket(enqueue, o.signal, onOpen, o.onReaction);
       if (o.signal?.aborted) break;
-      logger.warning('WS 连接被关闭,重连');
+      logger.warning('WS connection closed, reconnecting');
     } catch (e) {
       if (e instanceof AuthExpired) throw e;
-      logger.warning(`WS 断开,${(o.retryMs ?? 10_000) / 1000}s 后重连: ${(e as Error).message}`);
+      logger.warning(
+        `WS disconnected, reconnecting in ${(o.retryMs ?? 10_000) / 1000}s: ${(e as Error).message}`,
+      );
     }
     disconnectedAt ??= Date.now() - c.wsTiming.idleTimeoutMs;
     await sleep(o.retryMs ?? 10_000, o.signal);

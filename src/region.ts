@@ -26,7 +26,7 @@ export interface Region {
 export const REGIONS: Record<Region['name'], Region> = {
   feishu: {
     name: 'feishu',
-    label: '飞书',
+    label: 'Feishu',
     domain: 'feishu.cn',
     webAppId: '161471',
     locale: 'zh_CN',
@@ -58,7 +58,8 @@ export const REGIONS: Record<Region['name'], Region> = {
 
 export function getRegion(name: string): Region {
   const region = REGIONS[(name || '').trim().toLowerCase() as Region['name']];
-  if (!region) throw new Error(`未知区域: '${name}',可选: ${Object.keys(REGIONS).join(', ')}`);
+  if (!region)
+    throw new Error(`unknown region: '${name}' (valid: ${Object.keys(REGIONS).join(', ')})`);
   return region;
 }
 

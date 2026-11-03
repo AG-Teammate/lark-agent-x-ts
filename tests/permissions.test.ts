@@ -54,15 +54,15 @@ const permissionFor = (name: string, argv: string[]): Permission => {
   return typeof access === 'string' ? access : access(parse('lark', cmd(name), argv));
 };
 
-describe('权限目录', () => {
-  test('每个权限项都对应一个命令，分组名不和命令名重名', () => {
+describe('permission catalog', () => {
+  test('every permission maps to a command, and group names never clash with command names', () => {
     const names = new Set(COMMANDS.map((c) => c.name));
     for (const p of Object.keys(PERMISSIONS))
       expect(names.has(p.split('.')[0] as string)).toBe(true);
     for (const g of Object.keys(GROUPS)) expect(names.has(g)).toBe(false);
   });
 
-  test('读写混用的命令按参数取到不同的项', () => {
+  test('commands mixing reads and writes map to different permissions by argument', () => {
     expect(permissionFor('scheduled', ['c1'])).toBe('scheduled.list');
     expect(permissionFor('scheduled', ['c1', '--cancel', 'm1'])).toBe('scheduled.cancel');
     expect(permissionFor('shortcut', [])).toBe('shortcut.list');
@@ -73,7 +73,7 @@ describe('权限目录', () => {
     expect(permissionFor('send-image', ['c1', 'a.png'])).toBe('send-image');
   });
 
-  test('越具体的规则越优先，同一级 deny 优先，都没命中则允许', () => {
+  test('more specific rules win, deny wins at the same level, and no match means allowed', () => {
     expect(decide({ allow: [], deny: [] }, 'send')).toEqual({ allowed: true });
     expect(decide({ allow: ['send'], deny: ['*'] }, 'send')).toEqual({
       allowed: true,
@@ -98,7 +98,7 @@ describe('权限目录', () => {
     expect(decide({ allow: ['chats'], deny: ['query'] }, 'chats.remote').allowed).toBe(true);
   });
 
-  test('全局规则来自环境变量；账号有自己的规则时整体替代全局规则', () => {
+  test("global rules come from the environment; an account's own rules replace them entirely", () => {
     process.env.LARKX_DENY = 'outbound, manage';
     process.env.LARKX_ALLOW = '["send"]';
     expect(loadRules(fakeAuth()).rules).toEqual({ allow: ['send'], deny: ['outbound', 'manage'] });
@@ -116,20 +116,24 @@ describe('权限目录', () => {
     expect(loadRules(fakeAuth()).own).toBe(false);
   });
 
-  test('规则里有不认识的名字或权限文件损坏时报错，不放行', () => {
+  test('unknown names in rules or a corrupt permissions file raise an error instead of allowing', () => {
     process.env.LARKX_DENY = 'outbund';
-    expect(() => loadRules(fakeAuth())).toThrow('不认识的名字: outbund');
+    expect(() => loadRules(fakeAuth())).toThrow(
+      'unknown names in global rules (LARKX_ALLOW / LARKX_DENY): outbund (',
+    );
     delete process.env.LARKX_DENY;
     expect(() => saveAccountRules(fakeAuth(), { allow: ['sned'], deny: [] })).toThrow('sned');
     writeFileSync(join(home, 'permissions.json'), '{');
-    expect(() => loadRules(fakeAuth())).toThrow('读取权限文件');
+    expect(() => loadRules(fakeAuth())).toThrow('failed to read permissions file ');
     writeFileSync(join(home, 'permissions.json'), '[]');
-    expect(() => loadRules(fakeAuth())).toThrow('权限文件');
+    expect(() => loadRules(fakeAuth())).toThrow(
+      /^permissions file .* must be an object mapping user_id/,
+    );
   });
 });
 
-describe('库的权限检查', () => {
-  test('只检查最外层调用；传入的回调在检查范围之外执行', async () => {
+describe('library permission checks', () => {
+  test('only the outermost call is checked; callbacks passed in run outside the check', async () => {
     const checked: Permission[] = [];
     const obj = {
       async outer(cb?: () => Promise<unknown>) {
@@ -142,7 +146,7 @@ describe('库的权限检查', () => {
     };
     guardMethods(obj, { outer: 'listen', inner: 'get' }, (p) => {
       checked.push(p);
-      if (p === 'get') throw new PermissionDenied(p, 'deny get', '传入的规则');
+      if (p === 'get') throw new PermissionDenied(p, 'deny get', 'the supplied rules');
     });
     expect(await obj.outer()).toBe('ok');
     expect(checked).toEqual(['listen']);
@@ -153,7 +157,7 @@ describe('库的权限检查', () => {
     expect(checked.filter((p) => p === 'listen')).toHaveLength(4);
   });
 
-  test('客户端：不传 permissions 时不检查；传了时被拒绝的方法抛 PermissionDenied', async () => {
+  test('client: no checks without permissions; with them, denied methods throw PermissionDenied', async () => {
     const api = spyOn(LarkClient.prototype, 'api').mockImplementation(async () => ({}));
     try {
       process.env.LARKX_DENY = '*';
@@ -168,13 +172,13 @@ describe('库的权限检查', () => {
 
       await expect(
         LarkClient.create(fakeAuth(), { permissions: { allow: ['x'], deny: [] } }),
-      ).rejects.toThrow('不认识的名字: x');
+      ).rejects.toThrow('unknown names in the supplied rules: x (');
     } finally {
       api.mockRestore();
     }
   });
 
-  test('客户端：permissions 为 true 时按账号规则检查，改了规则立即生效', async () => {
+  test('client: permissions true checks account rules, and rule changes apply immediately', async () => {
     const api = spyOn(LarkClient.prototype, 'api').mockImplementation(async () => ({}));
     try {
       const c = await LarkClient.create(fakeAuth(), { permissions: true });
@@ -184,18 +188,18 @@ describe('库的权限检查', () => {
       // Sends map to send / send-image / send-file by content; a denial throws before any network call
       saveAccountRules(fakeAuth(), { allow: [], deny: ['outbound'] });
       await expect(c.sendMessage('c1', { file: new Uint8Array(), name: 'a.txt' })).rejects.toThrow(
-        '权限不允许执行 send-file(分组 outbound)',
+        'permission denied: send-file (group outbound) by rule deny outbound in rules for account ',
       );
       await expect(c.sendMessage('c1', { image: new Uint8Array() })).rejects.toThrow('send-image');
-      await expect(c.sendMsg('你好', 'c1')).rejects.toThrow('权限不允许执行 send(');
+      await expect(c.sendMsg('hello', 'c1')).rejects.toThrow('permission denied: send (');
     } finally {
       api.mockRestore();
     }
   });
 });
 
-describe('命令行的权限检查', () => {
-  test('被拒绝时退出码 126 并说明规则，帮助不受影响；账号规则替代全局规则', () => {
+describe('CLI permission checks', () => {
+  test('denial exits 126 and names the rule, help is unaffected; account rules replace global rules', () => {
     const main = join(import.meta.dir, '../src/cli/main.ts');
     const env: Record<string, string> = {
       PATH: process.env.PATH ?? '',
@@ -207,7 +211,9 @@ describe('命令行的权限检查', () => {
 
     const denied = run(['config'], { LARKX_DENY: 'local' });
     expect(denied.exitCode).toBe(126);
-    expect(denied.stderr.toString()).toContain('权限不允许执行 config(分组 local)');
+    expect(denied.stderr.toString()).toContain(
+      'lark config: permission denied: config (group local) by rule deny local in global rules (LARKX_ALLOW / LARKX_DENY)',
+    );
     expect(denied.stderr.toString()).toContain('deny local');
     expect(run(['config', '-h'], { LARKX_DENY: 'local' }).exitCode).toBe(0);
     expect(run(['config']).exitCode).toBe(0);
@@ -219,7 +225,7 @@ describe('命令行的权限检查', () => {
     expect(run(['chats'], { LARKX_DENY: 'chats' }).exitCode).toBe(0);
     const edit = run(['permissions', 'edit']);
     expect(edit.exitCode).toBe(2);
-    expect(edit.stderr.toString()).toContain('需要在终端里运行');
+    expect(edit.stderr.toString()).toContain('permissions edit must run in a terminal');
     expect(run(['permissions', 'clear']).exitCode).toBe(0);
     expect(run(['config']).exitCode).toBe(0);
   });
@@ -237,19 +243,19 @@ const line = (ed: PermissionEditor, key: string) =>
       .startsWith(`${key} `),
   ) ?? '';
 
-describe('权限编辑器', () => {
-  test('分组折叠展开、逐项切换，结果实时反映生效规则', () => {
-    const ed = new PermissionEditor({ allow: [], deny: ['outbound'] }, '标题');
+describe('permission editor', () => {
+  test('groups collapse/expand, items toggle, and results reflect the effective rules live', () => {
+    const ed = new PermissionEditor({ allow: [], deny: ['outbound'] }, 'Title');
     expect(ed.rows().map((r) => r.key)).toEqual(['*', ...Object.keys(GROUPS)]);
-    expect(line(ed, 'outbound')).toMatch(/outbound\s+拒绝 {2}→ 拒绝/);
+    expect(line(ed, 'outbound')).toMatch(/outbound\s+deny {5}→ deny /);
 
     press(ed, 'down', 'down', 'down', 'right'); // move cursor to outbound and expand
     expect(ed.rows().some((r) => r.key === 'send')).toBe(true);
-    expect(line(ed, 'send')).toMatch(/send\s+继承 {2}→ 拒绝 {2}由 deny outbound 决定/);
+    expect(line(ed, 'send')).toMatch(/send\s+inherit {2}→ deny {3}decided by deny outbound/);
 
     press(ed, 'down', 'a'); // allow send individually
     expect(ed.rules()).toEqual({ allow: ['send'], deny: ['outbound'] });
-    expect(line(ed, 'send')).toMatch(/send\s+允许 {2}→ 允许/);
+    expect(line(ed, 'send')).toMatch(/send\s+allow {4}→ allow/);
     press(ed, 'space'); // allow → deny
     expect(ed.rules()).toEqual({ allow: [], deny: ['outbound', 'send'] });
     press(ed, 'space'); // deny → inherit
@@ -259,11 +265,11 @@ describe('权限编辑器', () => {
     expect(ed.rows()[ed.cursor]?.key).toBe('outbound');
     press(ed, 'i');
     expect(ed.rules().deny).toEqual([]);
-    expect(line(ed, '*')).toMatch(/\*\s+继承 {2}→ 允许/);
+    expect(line(ed, '*')).toMatch(/\*\s+inherit {2}→ allow/);
   });
 
-  test('树里没有的规则原样保留；有修改时退出要确认', () => {
-    const ed = new PermissionEditor({ allow: [], deny: ['scheduled'] }, '标题', '说明');
+  test('rules not in the tree are kept as-is; quitting with changes asks for confirmation', () => {
+    const ed = new PermissionEditor({ allow: [], deny: ['scheduled'] }, 'Title', 'Note');
     expect(plain(ed.render(200, 100)).join('\n')).toContain('deny scheduled');
     expect(press(ed, 'q')).toEqual(['quit']); // unchanged, so quit directly
 
@@ -276,12 +282,16 @@ describe('权限编辑器', () => {
     expect(ed.handle({ name: 'c', ctrl: true })).toBe('quit');
   });
 
-  test('列表放不下时随光标滚动，行数不超过终端高度', () => {
-    const ed = new PermissionEditor({ allow: [], deny: [] }, '标题');
+  test('scrolls with the cursor when the list does not fit, never exceeding the terminal height', () => {
+    const ed = new PermissionEditor({ allow: [], deny: [] }, 'Title');
     press(ed, 'down', 'right', 'down', 'down', 'right');
     for (let i = 0; i < ed.rows().length; i++) press(ed, 'down');
     const screen = plain(ed.render(60, 12));
     expect(screen.length).toBeLessThanOrEqual(12);
     expect(screen.some((l) => l.startsWith('› '))).toBe(true);
+    // Item rows (the ones with a result arrow) stay within the terminal width, notes clipped to fit
+    const rows = screen.filter((l) => l.includes(' → '));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const l of rows) expect(l.length).toBeLessThan(60);
   });
 });

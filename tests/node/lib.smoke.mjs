@@ -17,7 +17,7 @@ const fixtures = JSON.parse(
 );
 const unb64 = (s) => Uint8Array.from(Buffer.from(s, 'base64'));
 
-test('库入口导出可在 Node 下加载', () => {
+test('library entry exports load under Node', () => {
   for (const name of [
     'LarkAuth',
     'LarkClient',
@@ -29,22 +29,22 @@ test('库入口导出可在 Node 下加载', () => {
     assert.ok(name in lib, name);
 });
 
-test('协议资产：cmd 映射与核心类型', () => {
+test('protocol assets: cmd map and core types', () => {
   const r = resolveCmd('messages.PutReadMessagesRequest');
   assert.equal(typeof r.cmd, 'number');
   assert.equal(r.req?.typeName, 'lark.messages.PutReadMessagesRequest');
 });
 
-test('消息内容解码与原项目一致', () => {
+test('message content decoding matches the parity fixtures', () => {
   for (const c of fixtures.contents) {
     const [summary] = decodeMessageContent(c.type, unb64(c.bytes));
-    if (c.name === '系统消息')
+    if (c.name === 'system message')
       assert.deepEqual(summary.split(' ').sort(), c.summary.split(' ').sort());
     else assert.equal(summary, c.summary, c.name);
   }
 });
 
-test('推送帧解析与原项目一致', () => {
+test('push frame parsing matches the parity fixtures', () => {
   const strip = (xs) =>
     xs.map(({ content_data: _, ...m }) => m).sort((a, b) => a.msg_id.localeCompare(b.msg_id));
   assert.deepEqual(
@@ -53,7 +53,7 @@ test('推送帧解析与原项目一致', () => {
   );
 });
 
-test('凭证按指定路径读写，目录不存在时自动创建', () => {
+test('credentials read/write at the given path, creating missing directories', () => {
   const dir = mkdtempSync(join(tmpdir(), 'larkx-node-'));
   try {
     const path = join(dir, 'sub', 'credentials.json');
@@ -71,7 +71,7 @@ test('凭证按指定路径读写，目录不存在时自动创建', () => {
   }
 });
 
-test('日志可接到宿主的 sink', () => {
+test('logs can be routed to a host sink', () => {
   const got = [];
   const dir = mkdtempSync(join(tmpdir(), 'larkx-node-'));
   const prev = lib.setLogSink((level, module, msg) => got.push([level, module, msg]));
@@ -85,10 +85,10 @@ test('日志可接到宿主的 sink', () => {
     got.map(([level, module]) => [level, module]),
     [['INFO', 'larkx.auth']],
   );
-  assert.match(got[0]?.[2] ?? '', /凭证已保存/);
+  assert.match(got[0]?.[2] ?? '', /^credentials saved to /);
 });
 
-test('长连接握手无响应时按超时失败（Node 的 WebSocket 此时可能不触发 close）', async () => {
+test("persistent connection fails on handshake timeout (Node's WebSocket may not fire close here)", async () => {
   const sockets = [];
   const server = createServer((s) => sockets.push(s));
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -98,7 +98,7 @@ test('长连接握手无响应时按超时失败（Node 的 WebSocket 此时可�
     c.buildWsUrl = async () => `ws://127.0.0.1:${server.address().port}`;
     await assert.rejects(
       c.connectWebsocket(async () => undefined),
-      /WS 握手超时\(200ms\)/,
+      /WS handshake timed out \(200ms\)/,
     );
   } finally {
     for (const s of sockets) s.destroy();
@@ -106,7 +106,7 @@ test('长连接握手无响应时按超时失败（Node 的 WebSocket 此时可�
   }
 });
 
-test('权限检查在 Node 下可用：只检查最外层调用，被拒绝时抛 PermissionDenied', async () => {
+test('permission checks work under Node: only the outermost call is checked; denial throws PermissionDenied', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'larkx-node-perm-'));
   const original = lib.LarkClient.prototype.api;
   lib.LarkClient.prototype.api = async () => ({});

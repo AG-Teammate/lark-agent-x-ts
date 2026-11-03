@@ -6,8 +6,8 @@ import { newClient } from './helpers.js';
 const hit = (id: string, over: Dict = {}) => ({
   id,
   type: 5,
-  titleHighlighted: '项目协作群',
-  summaryHighlighted: `同事甲: <h>月报</h>导出 ${id}`,
+  titleHighlighted: 'Project team',
+  summaryHighlighted: `Colleague A: <h>monthly report</h> export ${id}`,
   resultMeta: {
     messageMeta: {
       id,
@@ -21,8 +21,8 @@ const hit = (id: string, over: Dict = {}) => ({
   },
 });
 
-describe('跨会话搜消息', () => {
-  test('过滤条件进 messageFilter，按会话内同一 session 翻页，直到够数或没有更多', async () => {
+describe('cross-chat message search', () => {
+  test('filters go into messageFilter; pages within one session until enough results or no more', async () => {
     const c = newClient();
     Object.assign(c.auth, { region: { locale: 'zh_CN' } });
     const reqs: Dict[] = [];
@@ -42,7 +42,7 @@ describe('跨会话搜消息', () => {
       reqs.push((data as Dict).header as Dict);
       return pages[reqs.length - 1] ?? {};
     };
-    const got = await c.searchMessages('月报', {
+    const got = await c.searchMessages('monthly report', {
       chatIds: ['7200000000000000001'],
       fromIds: ['7100000000000000001'],
       since: 1_790_000_000_500,
@@ -52,13 +52,13 @@ describe('跨会话搜消息', () => {
       {
         msgId: 'm1',
         chatId: '7200000000000000001',
-        chatTitle: '项目协作群',
+        chatTitle: 'Project team',
         fromId: '7100000000000000001',
         createTime: 1_790_000_000,
         position: 7,
         msgType: 4,
         p2p: false,
-        summary: '同事甲: 月报导出 m1',
+        summary: 'Colleague A: monthly report export m1',
       },
       expect.objectContaining({ msgId: 'm2', p2p: true }),
     ]);
@@ -85,7 +85,7 @@ describe('跨会话搜消息', () => {
     expect([reqs[1]?.sessionSeqId, reqs[1]?.paginationToken]).toEqual([2, 't1']);
   });
 
-  test('时间参数：相对时长、日期、日期时间与时间戳', () => {
+  test('time arguments: relative durations, dates, date-times and timestamps', () => {
     const now = new Date(2026, 9, 14, 12, 0, 0).getTime();
     expect(parseTimeArg('30m', now)).toBe(now - 30 * 60_000);
     expect(parseTimeArg('3d', now)).toBe(now - 3 * 86_400_000);
@@ -94,11 +94,11 @@ describe('跨会话搜消息', () => {
     expect(parseTimeArg('1790000000', now)).toBe(1_790_000_000_000);
     expect(parseTimeArg('1790000000123', now)).toBe(1_790_000_000_123);
     expect(parseTimeArg('10m', now, true)).toBe(now + 10 * 60_000);
-    expect(() => parseTimeArg('昨天', now)).toThrow('无法识别的时间');
+    expect(() => parseTimeArg('yesterday', now)).toThrow('unrecognized time: yesterday');
   });
 });
 
-describe('按时间范围拉历史', () => {
+describe('history by time range', () => {
   // position 0..99; message n is created at 1000+10n seconds; 40..55 is a gap (e.g. recalled without trace)
   const exists = (p: number) => p >= 0 && p <= 99 && (p < 40 || p > 55);
   const fakeChat = () => {
@@ -128,7 +128,7 @@ describe('按时间范围拉历史', () => {
     return { c, calls: () => calls };
   };
 
-  test('二分查找时间对应的 position 边界，跨过空洞', async () => {
+  test('binary search for the position bounds of a time, skipping gaps', async () => {
     const { c, calls } = fakeChat();
     expect(await c.positionAt('g1', 1_000_000, 99)).toBe(0);
     expect(await c.positionAt('g1', 1_300_000, 99)).toBe(30);
@@ -139,7 +139,7 @@ describe('按时间范围拉历史', () => {
     expect(calls()).toBeLessThan(60);
   });
 
-  test('范围内取最新的 limit 条，两端都含', async () => {
+  test('take the latest limit messages in range, both ends inclusive', async () => {
     const { c } = fakeChat();
     const got = await c.historyRange('g1', { since: 1_300_000, until: 1_600_000, limit: 5 });
     expect(got.map((m) => m.position)).toEqual([56, 57, 58, 59, 60]);
@@ -152,8 +152,8 @@ describe('按时间范围拉历史', () => {
   });
 });
 
-describe('翻译', () => {
-  test('文本翻译按顺序返回；消息翻译用消息的文字内容，跳过没有文字的', async () => {
+describe('translation', () => {
+  test('text translation keeps order; message translation uses the text content and skips messages without text', async () => {
     const c = newClient();
     const reqs: Dict[] = [];
     c.api = async (type, data) => {
@@ -164,7 +164,7 @@ describe('翻译', () => {
               id: 'm1',
               type: 4,
               chatId: 'g1',
-              content: (await import('./helpers.js')).textContent('周五上线'),
+              content: (await import('./helpers.js')).textContent('Ship on Friday'),
             },
             m2: {
               id: 'm2',
@@ -178,15 +178,15 @@ describe('翻译', () => {
       return { trgContents: ((data as Dict).srcContents as string[]).map((t) => `EN(${t})`) };
     };
     c.isThreadChat = async () => false;
-    expect(await c.translateText(['甲', '乙'], 'en')).toEqual(['EN(甲)', 'EN(乙)']);
+    expect(await c.translateText(['first', 'second'], 'en')).toEqual(['EN(first)', 'EN(second)']);
     expect(reqs[0]).toEqual({
-      srcContents: ['甲', '乙'],
+      srcContents: ['first', 'second'],
       srcLanguage: '',
       trgLanguage: 'en',
       contentType: 2,
     });
     expect(await c.translateMessages(['m1', 'm2', 'm3'], 'en')).toEqual([
-      { msgId: 'm1', original: '周五上线', translated: 'EN(周五上线)' },
+      { msgId: 'm1', original: 'Ship on Friday', translated: 'EN(Ship on Friday)' },
     ]);
     expect(await c.translateText([], 'en')).toEqual([]);
   });

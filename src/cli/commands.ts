@@ -73,41 +73,41 @@ async function qrLogin(auth: LarkAuth, region: Region): Promise<number> {
       return 1;
     }
     await saveQrPng(ql.qrContent, pngPath);
-    out(`[${attempt}/6] 二维码已刷新(请用 ${region.label} App 扫码): ${pngPath}`);
+    out(`[${attempt}/6] QR code refreshed (scan it with the ${region.label} app): ${pngPath}`);
     if (attempt === 1) out(qrAscii(ql.qrContent));
     const [ok] = await ql.wait(45, 2, (status, step) =>
       out(
-        `状态: ${status === undefined ? 'None' : (QR_STATUS_NAMES[status] ?? status)} (${step ?? 'None'})`,
+        `status: ${status === undefined ? 'None' : (QR_STATUS_NAMES[status] ?? status)} (${step ?? 'None'})`,
       ),
     );
     if (ok) {
       try {
-        out(`登录成功,凭证已保存: ${await ql.finish(auth)}`);
+        out(`logged in, credentials saved: ${await ql.finish(auth)}`);
         return 0;
       } catch (e) {
         err((e as Error).message);
         return 1;
       }
     }
-    out('当前二维码已失效,自动刷新...');
+    out('QR code expired, refreshing...');
   }
-  err('多次刷新后仍未完成登录,请重试');
+  err('login not completed after several refreshes, please try again');
   return 1;
 }
 
 const auth: Command = {
   name: 'auth',
-  help: '凭证管理',
+  help: 'manage credentials',
   access: (a) => `auth.${a.action as 'status' | 'import' | 'check' | 'qr'}`,
   positionals: [{ name: 'action', choices: ['status', 'import', 'check', 'qr'] }],
   options: [
-    { name: 'cookie', kind: 'string', help: '直接传 cookie 串' },
-    { name: 'file', kind: 'string', help: '从文件读 cookie' },
+    { name: 'cookie', kind: 'string', help: 'cookie string' },
+    { name: 'file', kind: 'string', help: 'read the cookie from a file' },
     {
       name: 'region',
       kind: 'string',
       choices: Object.keys(REGIONS),
-      help: 'qr/import 登录的区域: feishu=飞书(国内版) lark=Lark(国际版) lark-jp=Lark 日本数据中心(jp.larksuite.com);默认沿用已有凭证,无凭证时取 LARKX_REGION',
+      help: 'region for qr/import: feishu=Feishu (China), lark=Lark (international), lark-jp=Lark Japan data center (jp.larksuite.com); defaults to the saved credentials, else LARKX_REGION',
     },
   ],
   async run(a) {
@@ -124,14 +124,14 @@ const auth: Command = {
       if (a.cookie) cookieStr = String(a.cookie);
       else if (a.file) cookieStr = readFileSync(String(a.file), 'utf8');
       else {
-        logger.info('请粘贴 cookie 串,回车结束:');
+        logger.info('paste the cookie string and press Enter:');
         cookieStr = await readLine('');
       }
       try {
-        out(`导入成功(${region.name}): ${await la.importCookieString(cookieStr, region)}`);
+        out(`imported (${region.name}): ${await la.importCookieString(cookieStr, region)}`);
         return 0;
       } catch (e) {
-        err(`导入失败: ${(e as Error).message}`);
+        err(`import failed: ${(e as Error).message}`);
         return 1;
       }
     }
@@ -148,42 +148,46 @@ const auth: Command = {
 const NAMES_OPTION: Option = {
   name: 'names',
   kind: 'flag',
-  help: '发送者显示为名字(--json 时多一个 from_name)',
+  help: 'show sender names (adds from_name with --json)',
 };
 
 const REPLY_OPTIONS: Option[] = [
-  { name: 'root', kind: 'string', help: '话题/线程根消息 id,回复进话题' },
-  { name: 'reply', kind: 'string', help: '引用回复某条消息 id(被引用消息在话题里时自动进话题)' },
+  { name: 'root', kind: 'string', help: 'thread root message id; reply in that thread' },
+  {
+    name: 'reply',
+    kind: 'string',
+    help: 'quote-reply to this message id (goes into the thread if the quoted message is in one)',
+  },
   {
     name: 'cid',
     kind: 'string',
-    help: '消息的客户端 id(幂等键):同一个 cid 重发拿到的是同一条消息,不会发重',
+    help: 'client message id (idempotency key): resending with the same cid returns the same message instead of a duplicate',
   },
 ];
 
 const send: Command = {
   name: 'send',
-  help: '发送文本消息',
+  help: 'send a text message',
   access: 'send',
   positionals: [{ name: 'chat_id' }, { name: 'text', nargs: '+' }],
   options: [
     ...REPLY_OPTIONS,
-    { name: 'links', kind: 'flag', help: '把文本里的 [文字](url) 发成带文字的超链接' },
+    { name: 'links', kind: 'flag', help: 'send [text](url) in the text as hyperlinks' },
     {
       name: 'post',
       kind: 'flag',
-      help: '按富文本发送:text 是 HTML 片段(<p><b><a href><ul><li><blockquote><at user_id>)',
+      help: 'send as rich text: text is an HTML fragment (<p><b><a href><ul><li><blockquote><at user_id>)',
     },
     {
       name: 'md',
       kind: 'flag',
-      help: '按 Markdown 发送(标题、列表、代码块、引用、加粗斜体、链接),客户端按 Markdown 渲染',
+      help: 'send as Markdown (headings, lists, code blocks, quotes, bold/italic, links), rendered by the client',
     },
-    { name: 'title', kind: 'string', help: '富文本标题(配合 --post / --md)' },
+    { name: 'title', kind: 'string', help: 'rich-text title (with --post / --md)' },
     {
       name: 'rich',
       kind: 'string',
-      help: '结构化富文本 JSON(或 @文件路径),text 作为纯文本摘要;blocks: p/ul/quote/blank,run: text|link|at',
+      help: 'structured rich-text JSON (or @file path), with text as the plain-text summary; blocks: p/ul/quote/blank, runs: text|link|at',
     },
   ],
   async run(a) {
@@ -203,7 +207,7 @@ const send: Command = {
       try {
         msgId = await c.sendMessage(chatId, { markdown: text, title: s(a.title) ?? '' }, o);
       } catch (e) {
-        logger.error(`发送 Markdown 失败: ${errorText(e)}`);
+        logger.error(`failed to send Markdown: ${errorText(e)}`);
         msgId = null;
       }
     } else if (a.post) {
@@ -239,7 +243,7 @@ async function finishSend(
 ): Promise<number> {
   if (!msgId) {
     await st.close();
-    err('发送失败');
+    err('send failed');
     return 1;
   }
   const { rootId, replyTo: reply } = o;
@@ -264,19 +268,19 @@ async function finishSend(
       content_data: null,
       create_time: Math.floor(Date.now() / 1000),
     },
-    { senderName: '我', direction: 'out' },
+    { senderName: 'me', direction: 'out' },
   );
   await st.close();
-  out(`已发送 msg_id=${msgId}`);
+  out(`sent msg_id=${msgId}`);
   return 0;
 }
 
 /** Send an image or file: read the local file, upload it, then send. */
 function mediaCommand(kind: 'image' | 'file'): Command {
-  const label = kind === 'image' ? '图片' : '文件';
+  const label = kind === 'image' ? 'image' : 'file';
   return {
     name: `send-${kind}`,
-    help: `发送${label}(本地文件,自动上传)`,
+    help: `send a local ${label} (uploaded automatically)`,
     access: `send-${kind}`,
     positionals: [{ name: 'chat_id' }, { name: 'path' }],
     options: REPLY_OPTIONS,
@@ -291,7 +295,7 @@ function mediaCommand(kind: 'image' | 'file'): Command {
         data = new Uint8Array(readFileSync(path));
       } catch (e) {
         await st.close();
-        err(`读取文件失败: ${(e as Error).message}`);
+        err(`failed to read file: ${(e as Error).message}`);
         return 1;
       }
       const o = await replyTarget(st, chatId, a);
@@ -303,7 +307,7 @@ function mediaCommand(kind: 'image' | 'file'): Command {
           o,
         );
       } catch (e) {
-        logger.error(`发送${label}失败: ${errorText(e)}`);
+        logger.error(`failed to send ${label}: ${errorText(e)}`);
       }
       return finishSend(st, c, chatId, msgId, o, kind === 'image' ? 5 : 3, `[${label}] ${name}`);
     },
@@ -312,7 +316,7 @@ function mediaCommand(kind: 'image' | 'file'): Command {
 
 const schedule: Command = {
   name: 'schedule',
-  help: '定时发送消息(到点由服务端发出)',
+  help: 'schedule a message (sent by the server at the given time)',
   access: 'schedule',
   positionals: [{ name: 'chat_id' }, { name: 'text', nargs: '+' }],
   options: [
@@ -320,10 +324,10 @@ const schedule: Command = {
       name: 'at',
       kind: 'string',
       required: true,
-      help: '发送时间:10m/2h/1d 后、2026-10-15 09:30 或时间戳',
+      help: 'send time: 10m/2h/1d from now, 2026-10-15 09:30, or a timestamp',
     },
     ...REPLY_OPTIONS,
-    { name: 'md', kind: 'flag', help: '按 Markdown 发送' },
+    { name: 'md', kind: 'flag', help: 'send as Markdown' },
   ],
   async run(a) {
     let at: number;
@@ -334,7 +338,7 @@ const schedule: Command = {
       return 1;
     }
     if (at <= Date.now()) {
-      err('发送时间要晚于现在');
+      err('send time must be in the future');
       return 1;
     }
     const c = await client();
@@ -345,10 +349,10 @@ const schedule: Command = {
     await st.close();
     try {
       const id = await c.scheduleMessage(chatId, a.md ? { markdown: text } : { text }, at, o);
-      out(`已定时 msg_id=${id} 发送时间 ${shortTime(Math.floor(at / 1000))}`);
+      out(`scheduled msg_id=${id} at ${shortTime(Math.floor(at / 1000))}`);
       return 0;
     } catch (e) {
-      err(`定时发送失败: ${errorText(e)}`);
+      err(`failed to schedule: ${errorText(e)}`);
       return 1;
     }
   },
@@ -356,14 +360,19 @@ const schedule: Command = {
 
 const scheduled: Command = {
   name: 'scheduled',
-  help: '会话里还没发出的定时消息;--cancel 取消,--reschedule 配合 --at 改时间',
+  help: 'list pending scheduled messages in a chat; --cancel cancels one, --reschedule with --at changes its time',
   access: (a) =>
     a.cancel ? 'scheduled.cancel' : a.reschedule ? 'scheduled.reschedule' : 'scheduled.list',
   positionals: [{ name: 'chat_id' }],
   options: [
-    { name: 'cancel', kind: 'string', metavar: 'MSG_ID', help: '取消这条定时消息' },
-    { name: 'reschedule', kind: 'string', metavar: 'MSG_ID', help: '改这条定时消息的发送时间' },
-    { name: 'at', kind: 'string', help: '新的发送时间(配合 --reschedule)' },
+    { name: 'cancel', kind: 'string', metavar: 'MSG_ID', help: 'cancel this scheduled message' },
+    {
+      name: 'reschedule',
+      kind: 'string',
+      metavar: 'MSG_ID',
+      help: 'change the send time of this scheduled message',
+    },
+    { name: 'at', kind: 'string', help: 'new send time (with --reschedule)' },
     { name: 'json', kind: 'flag' },
   ],
   async run(a) {
@@ -372,21 +381,21 @@ const scheduled: Command = {
     try {
       if (a.cancel) {
         await c.cancelScheduledMessage(chatId, String(a.cancel));
-        out(`已取消定时消息 msg_id=${a.cancel}`);
+        out(`cancelled msg_id=${a.cancel}`);
         return 0;
       }
       if (a.reschedule) {
         if (!a.at) {
-          err('--reschedule 需要配合 --at');
+          err('--reschedule requires --at');
           return 2;
         }
         const at = parseTimeArg(String(a.at), Date.now(), true);
         await c.rescheduleMessage(chatId, String(a.reschedule), at);
-        out(`已改为 ${shortTime(Math.floor(at / 1000))} 发送 msg_id=${a.reschedule}`);
+        out(`rescheduled msg_id=${a.reschedule} to ${shortTime(Math.floor(at / 1000))}`);
         return 0;
       }
     } catch (e) {
-      err(`操作失败: ${errorText(e)}`);
+      err(`operation failed: ${errorText(e)}`);
       return 1;
     }
     const list = await c.scheduledMessages(chatId);
@@ -395,7 +404,7 @@ const scheduled: Command = {
     else
       for (const m of list)
         out(
-          `${m.messageId} [${shortTime(Math.floor(m.at / 1000))}]${m.status === 'suspended' ? '(已暂停)' : ''} ${preview(m.message?.content || '', 100)}`,
+          `${m.messageId} [${shortTime(Math.floor(m.at / 1000))}]${m.status === 'suspended' ? ' (suspended)' : ''} ${preview(m.message?.content || '', 100)}`,
         );
     return 0;
   },
@@ -403,12 +412,17 @@ const scheduled: Command = {
 
 const translate: Command = {
   name: 'translate',
-  help: '翻译文本;--msg 时参数是消息 id,翻译这些消息',
+  help: 'translate text; with --msg, translate the given message ids',
   access: 'translate',
-  positionals: [{ name: 'args', nargs: '+', help: '要翻译的文本(--msg 时为消息 id)' }],
+  positionals: [{ name: 'args', nargs: '+', help: 'text to translate (message ids with --msg)' }],
   options: [
-    { name: 'to', kind: 'string', default: 'zh', help: '目标语言(zh、en、ja 等,默认 zh)' },
-    { name: 'msg', kind: 'flag', help: '参数是消息 id' },
+    {
+      name: 'to',
+      kind: 'string',
+      default: 'zh',
+      help: 'target language (zh, en, ja, ...; default zh)',
+    },
+    { name: 'msg', kind: 'flag', help: 'arguments are message ids' },
     { name: 'json', kind: 'flag' },
   ],
   async run(a) {
@@ -421,14 +435,14 @@ const translate: Command = {
         if (a.json) printJson(list);
         else for (const t of list) out(`${t.msgId}\t${t.translated}`);
         const missing = args.filter((id) => !list.some((t) => t.msgId === id));
-        if (missing.length) err(`没有可翻译的内容: ${missing.join(', ')}`);
+        if (missing.length) err(`nothing to translate: ${missing.join(', ')}`);
         return 0;
       }
       const [translated] = await c.translateText([args.join(' ')], to);
       out(String(translated));
       return 0;
     } catch (e) {
-      err(`翻译失败: ${errorText(e)}`);
+      err(`translation failed: ${errorText(e)}`);
       return 1;
     }
   },
@@ -436,7 +450,7 @@ const translate: Command = {
 
 const forward: Command = {
   name: 'forward',
-  help: '把一条消息转发到一个或多个会话',
+  help: 'forward a message to one or more chats',
   access: 'forward',
   positionals: [{ name: 'msg_id' }, { name: 'chat_ids', nargs: '+' }],
   async run(a) {
@@ -445,28 +459,32 @@ const forward: Command = {
     try {
       sent = await (await client()).forwardMessage(String(a.msg_id), targets);
     } catch (e) {
-      err(`转发失败: ${errorText(e)}`);
+      err(`forward failed: ${errorText(e)}`);
       return 1;
     }
     for (const chatId of targets)
-      if (sent.has(chatId)) out(`已转发 chat_id=${chatId} msg_id=${sent.get(chatId)}`);
-      else err(`转发到 ${chatId} 失败`);
+      if (sent.has(chatId)) out(`forwarded chat_id=${chatId} msg_id=${sent.get(chatId)}`);
+      else err(`failed to forward to ${chatId}`);
     return sent.size === targets.length ? 0 : 1;
   },
 };
 
 const group: Command = {
   name: 'group',
-  help: '群管理:create <群名> 建群、add/remove <chat_id> <user_id...> 拉人/移出、rename <chat_id> <新群名>',
+  help: 'manage groups: create <name>, add/remove <chat_id> <user_id...>, rename <chat_id> <new name>',
   access: (a) => `group.${a.action as 'create' | 'add' | 'remove' | 'rename'}`,
   positionals: [
     { name: 'action', choices: ['create', 'add', 'remove', 'rename'] },
     { name: 'args', nargs: '+' },
   ],
   options: [
-    { name: 'members', kind: 'string', help: 'create 时一起拉进群的人(user_id,逗号分隔)' },
-    { name: 'desc', kind: 'string', help: '群描述(create / rename)' },
-    { name: 'topic', kind: 'flag', help: 'create 时建话题群' },
+    {
+      name: 'members',
+      kind: 'string',
+      help: 'members to add on create (user_ids, comma-separated)',
+    },
+    { name: 'desc', kind: 'string', help: 'group description (create / rename)' },
+    { name: 'topic', kind: 'flag', help: 'create a thread group' },
   ],
   async run(a) {
     const c = await client();
@@ -479,33 +497,35 @@ const group: Command = {
             ...(a.desc ? { description: String(a.desc) } : {}),
             topic: Boolean(a.topic),
           });
-          out(`已建群 chat_id=${id}`);
+          out(`created chat_id=${id}`);
           return 0;
         }
         case 'add':
         case 'remove':
           if (!rest.length) {
-            err('需要 user_id');
+            err('user_id required');
             return 2;
           }
           if (a.action === 'add') await c.addMembers(target, rest);
           else await c.removeMembers(target, rest);
-          out(`已${a.action === 'add' ? '拉进' : '移出'} ${rest.length} 人 chat_id=${target}`);
+          out(
+            `${a.action === 'add' ? 'added' : 'removed'} ${rest.length} member(s) chat_id=${target}`,
+          );
           return 0;
         default:
           if (!rest.length && !a.desc) {
-            err('需要新群名或 --desc');
+            err('new name or --desc required');
             return 2;
           }
           await c.updateGroup(target, {
             ...(rest.length ? { name: rest.join(' ') } : {}),
             ...(a.desc ? { description: String(a.desc) } : {}),
           });
-          out(`已更新 chat_id=${target}`);
+          out(`updated chat_id=${target}`);
           return 0;
       }
     } catch (e) {
-      err(`群操作失败: ${errorText(e)}`);
+      err(`group operation failed: ${errorText(e)}`);
       return 1;
     }
   },
@@ -513,10 +533,10 @@ const group: Command = {
 
 const pin: Command = {
   name: 'pin',
-  help: 'Pin 一条消息到会话(会话成员都看得到);--remove 取消 Pin',
+  help: 'Pin a message in a chat (visible to all members); --remove unpins',
   access: 'pin',
   positionals: [{ name: 'chat_id' }, { name: 'msg_id' }],
-  options: [{ name: 'remove', kind: 'flag', help: '取消 Pin' }],
+  options: [{ name: 'remove', kind: 'flag', help: 'unpin' }],
   async run(a) {
     const c = await client();
     const chatId = String(a.chat_id);
@@ -524,14 +544,14 @@ const pin: Command = {
     try {
       if (a.remove) {
         if (!(await c.unpinMessage(chatId, msgId))) {
-          err(`消息 ${msgId} 没有被 Pin`);
+          err(`message ${msgId} is not pinned`);
           return 1;
         }
-        out(`已取消 Pin msg_id=${msgId}`);
-      } else out(`已 Pin msg_id=${msgId} pin_id=${await c.pinMessage(chatId, msgId)}`);
+        out(`unpinned msg_id=${msgId}`);
+      } else out(`pinned msg_id=${msgId} pin_id=${await c.pinMessage(chatId, msgId)}`);
       return 0;
     } catch (e) {
-      err(`Pin 操作失败: ${errorText(e)}`);
+      err(`Pin failed: ${errorText(e)}`);
       return 1;
     }
   },
@@ -539,7 +559,7 @@ const pin: Command = {
 
 const pins: Command = {
   name: 'pins',
-  help: '列出会话里被 Pin 的消息',
+  help: 'list pinned messages in a chat',
   access: 'pins',
   positionals: [{ name: 'chat_id' }],
   options: [{ name: 'json', kind: 'flag' }],
@@ -564,11 +584,11 @@ const pins: Command = {
 
 const shortcut: Command = {
   name: 'shortcut',
-  help: '在会话列表里置顶会话(只影响自己);--remove 取消置顶;不带参数列出已置顶的',
+  help: 'pin chats to your chat list (only affects you); --remove unpins; no arguments lists pinned chats',
   access: (a) =>
     !list(a.chat_ids)?.length ? 'shortcut.list' : a.remove ? 'shortcut.remove' : 'shortcut.add',
-  positionals: [{ name: 'chat_ids', nargs: '?', help: '会话 id(逗号分隔)' }],
-  options: [{ name: 'remove', kind: 'flag', help: '取消置顶' }],
+  positionals: [{ name: 'chat_ids', nargs: '?', help: 'chat ids (comma-separated)' }],
+  options: [{ name: 'remove', kind: 'flag', help: 'unpin from the chat list' }],
   async run(a) {
     const c = await client();
     const ids = list(a.chat_ids);
@@ -580,22 +600,22 @@ const shortcut: Command = {
       if (a.remove) await c.removeShortcuts(ids);
       else await c.addShortcuts(ids);
     } catch (e) {
-      err(`置顶操作失败: ${errorText(e)}`);
+      err(`failed to update chat list pins: ${errorText(e)}`);
       return 1;
     }
-    out(`已${a.remove ? '取消置顶' : '置顶'} ${ids.length} 个会话`);
+    out(`${a.remove ? 'unpinned' : 'pinned'} ${ids.length} chat(s)`);
     return 0;
   },
 };
 
 const flag: Command = {
   name: 'flag',
-  help: '标记消息(留给自己稍后处理);--chat 标记会话,--remove 取消标记',
+  help: 'flag messages for later; --chat flags chats, --remove unflags',
   access: 'flag',
-  positionals: [{ name: 'ids', nargs: '+', help: '消息 id(--chat 时为 chat_id)' }],
+  positionals: [{ name: 'ids', nargs: '+', help: 'message ids (chat_ids with --chat)' }],
   options: [
-    { name: 'chat', kind: 'flag', help: '标记的是会话' },
-    { name: 'remove', kind: 'flag', help: '取消标记' },
+    { name: 'chat', kind: 'flag', help: 'ids are chats' },
+    { name: 'remove', kind: 'flag', help: 'remove the flag' },
   ],
   async run(a) {
     const c = await client();
@@ -604,17 +624,17 @@ const flag: Command = {
       if (a.chat) await c.flagChats(ids, Boolean(a.remove));
       else await c.flagMessages(ids, Boolean(a.remove));
     } catch (e) {
-      err(`标记失败: ${errorText(e)}`);
+      err(`flag failed: ${errorText(e)}`);
       return 1;
     }
-    out(`已${a.remove ? '取消标记' : '标记'} ${ids.length} 个${a.chat ? '会话' : '消息'}`);
+    out(`${a.remove ? 'unflagged' : 'flagged'} ${ids.length} ${a.chat ? 'chat(s)' : 'message(s)'}`);
     return 0;
   },
 };
 
 const flags: Command = {
   name: 'flags',
-  help: '列出我的标记(消息与会话)',
+  help: 'list my flags (messages and chats)',
   access: 'flags',
   options: [
     { name: 'limit', kind: 'int', default: 50 },
@@ -635,8 +655,8 @@ const flags: Command = {
         const m = f.message;
         out(
           f.type === 'chat'
-            ? `会话 ${f.id}`
-            : `消息 ${f.id} ${m ? `${m.chat_id} [${shortTime(m.create_time)}] ${m.from_id}: ${preview(m.content || '', 100)}` : ''}`,
+            ? `chat ${f.id}`
+            : `message ${f.id} ${m ? `${m.chat_id} [${shortTime(m.create_time)}] ${m.from_id}: ${preview(m.content || '', 100)}` : ''}`,
         );
       }
     return 0;
@@ -645,7 +665,7 @@ const flags: Command = {
 
 const recall: Command = {
   name: 'recall',
-  help: '撤回消息(自己发的;群管理员可撤回群里别人的)',
+  help: 'recall messages (your own; group admins can recall others in the group)',
   access: 'recall',
   positionals: [{ name: 'message_ids', nargs: '+' }],
   async run(a) {
@@ -654,10 +674,10 @@ const recall: Command = {
     for (const id of a.message_ids as string[]) {
       try {
         await c.recallMessage(id);
-        out(`已撤回 msg_id=${id}`);
+        out(`recalled msg_id=${id}`);
       } catch (e) {
         failed++;
-        err(`撤回 ${id} 失败: ${errorText(e)}`);
+        err(`failed to recall ${id}: ${errorText(e)}`);
       }
     }
     return failed ? 1 : 0;
@@ -666,16 +686,16 @@ const recall: Command = {
 
 const edit: Command = {
   name: 'edit',
-  help: '编辑自己发的文本/富文本消息(整条替换,对方看到"已编辑")',
+  help: 'edit your own text/rich-text message (replaces it whole; others see "edited")',
   access: 'edit',
   positionals: [{ name: 'msg_id' }, { name: 'text', nargs: '+' }],
   options: [
-    { name: 'links', kind: 'flag', help: '把文本里的 [文字](url) 发成带文字的超链接' },
-    { name: 'md', kind: 'flag', help: '按 Markdown 改写;原消息须是富文本' },
+    { name: 'links', kind: 'flag', help: 'send [text](url) in the text as hyperlinks' },
+    { name: 'md', kind: 'flag', help: 'rewrite as Markdown; the original must be rich text' },
     {
       name: 'rich',
       kind: 'string',
-      help: '结构化富文本 JSON(或 @文件路径),text 作为纯文本摘要;原消息须是富文本',
+      help: 'structured rich-text JSON (or @file path), with text as the plain-text summary; the original must be rich text',
     },
   ],
   async run(a) {
@@ -692,20 +712,20 @@ const edit: Command = {
       } else if (a.md) await c.editMessage(id, { markdown: text });
       else await c.editMessage(id, { text, links: Boolean(a.links) });
     } catch (e) {
-      err(`编辑失败: ${errorText(e)}`);
+      err(`edit failed: ${errorText(e)}`);
       return 1;
     }
-    out(`已编辑 msg_id=${id}`);
+    out(`edited msg_id=${id}`);
     return 0;
   },
 };
 
 const react: Command = {
   name: 'react',
-  help: '给消息加表情回复(如 THUMBSUP、OK、DONE、SMILE);--remove 去掉',
+  help: 'add a reaction to messages (e.g. THUMBSUP, OK, DONE, SMILE); --remove removes it',
   access: 'react',
   positionals: [{ name: 'msg_id' }, { name: 'reaction_type' }],
-  options: [{ name: 'remove', kind: 'flag', help: '去掉自己加的这个表情' }],
+  options: [{ name: 'remove', kind: 'flag', help: 'remove your own reaction' }],
   async run(a) {
     const c = await client();
     const id = String(a.msg_id);
@@ -714,17 +734,17 @@ const react: Command = {
       if (a.remove) await c.removeReaction(id, type);
       else await c.addReaction(id, type);
     } catch (e) {
-      err(`${a.remove ? '去掉' : '添加'}表情失败: ${errorText(e)}`);
+      err(`failed to ${a.remove ? 'remove' : 'add'} reaction: ${errorText(e)}`);
       return 1;
     }
-    out(`已${a.remove ? '去掉' : '添加'}表情 ${type} msg_id=${id}`);
+    out(`${a.remove ? 'removed' : 'added'} reaction ${type} msg_id=${id}`);
     return 0;
   },
 };
 
 const reactions: Command = {
   name: 'reactions',
-  help: '查看消息上的表情回复',
+  help: 'show reactions on messages',
   access: 'reactions',
   positionals: [{ name: 'message_ids', nargs: '+' }],
   options: [{ name: 'json', kind: 'flag' }],
@@ -741,11 +761,11 @@ const reactions: Command = {
 
 const readStatus: Command = {
   name: 'read-status',
-  help: '消息的已读情况:谁读了、谁没读(发送方视角);--me 看我自己是否读过',
+  help: 'read status of messages: who has read them and who has not (sender view); --me checks whether you have read them',
   access: 'read-status',
   positionals: [{ name: 'chat_id' }, { name: 'message_ids', nargs: '+' }],
   options: [
-    { name: 'me', kind: 'flag', help: '看我自己是否读过这些消息' },
+    { name: 'me', kind: 'flag', help: 'check whether you have read these messages' },
     NAMES_OPTION,
     { name: 'json', kind: 'flag' },
   ],
@@ -756,7 +776,7 @@ const readStatus: Command = {
       const mine = await c.myReadStates(ids);
       if (a.json) printJson(Object.fromEntries(mine));
       else
-        for (const [id, t] of mine) out(`${id}\t${t === null ? '未读' : `已读 ${shortTime(t)}`}`);
+        for (const [id, t] of mine) out(`${id}\t${t === null ? 'unread' : `read ${shortTime(t)}`}`);
       return 0;
     }
     const states = await c.readStates(String(a.chat_id), ids);
@@ -768,7 +788,7 @@ const readStatus: Command = {
     else
       for (const st of states)
         out(
-          `${st.messageId}\t已读 ${st.readCount}\t未读 ${st.unreadCount}${st.unreadUserIds.length ? `\t未读: ${who(st.unreadUserIds)}` : ''}`,
+          `${st.messageId}\tread ${st.readCount}\tunread ${st.unreadCount}${st.unreadUserIds.length ? `\tunread: ${who(st.unreadUserIds)}` : ''}`,
         );
     return 0;
   },
@@ -776,13 +796,13 @@ const readStatus: Command = {
 
 const messageLink: Command = {
   name: 'message-link',
-  help: '生成消息链接(applink client/message/link/open?token=...);多个消息 id 生成一个合并链接',
+  help: 'create a message link (applink client/message/link/open?token=...); several message ids make one combined link',
   access: 'message-link',
   positionals: [{ name: 'chat_id' }, { name: 'message_ids', nargs: '+' }],
   async run(a) {
     const url = await (await client()).messageLink(String(a.chat_id), a.message_ids as string[]);
     if (!url) {
-      err('生成消息链接失败');
+      err('failed to create message link');
       return 1;
     }
     out(url);
@@ -792,12 +812,12 @@ const messageLink: Command = {
 
 const selfChat: Command = {
   name: 'self-chat',
-  help: '打印当前账号与自己的会话 chat_id(可用于 lark send 给自己留言)',
+  help: 'print the current account and the chat_id of your own chat (for lark send notes to yourself)',
   access: 'self-chat',
   async run() {
     const cid = await (await client()).selfChat();
     if (!cid) {
-      err('获取自聊会话失败');
+      err('failed to get your own chat');
       return 1;
     }
     out(cid);
@@ -807,16 +827,16 @@ const selfChat: Command = {
 
 const read: Command = {
   name: 'read',
-  help: '把消息标为已读(同客户端看过:未读推进到其中最新一条,发送方看到已读;话题回复按话题标记)',
+  help: 'mark messages as read (as if viewed in the client: advances the read position to the newest one and the sender sees them read; thread replies are marked per thread)',
   access: 'read',
   positionals: [{ name: 'chat_id' }, { name: 'message_ids', nargs: '+' }],
   async run(a) {
     const c = await client();
     try {
-      out(`已读 ${await c.readMessages(String(a.chat_id), a.message_ids as string[])} 条`);
+      out(`marked ${await c.readMessages(String(a.chat_id), a.message_ids as string[])} read`);
       return 0;
     } catch (e) {
-      err(`标记已读失败: ${(e as Error).message}`);
+      err(`failed to mark read: ${(e as Error).message}`);
       return 1;
     }
   },
@@ -824,7 +844,7 @@ const read: Command = {
 
 const config: Command = {
   name: 'config',
-  help: '查看生效中的配置(配置项写在 .env 里)',
+  help: 'show the effective configuration (set in .env)',
   access: 'config',
   async run() {
     printJson(loadConfig());
@@ -832,16 +852,20 @@ const config: Command = {
   },
 };
 
-const CHAT_TYPE_LABELS: Record<number, string> = { 1: '私聊', 2: '群聊', 3: '话题群' };
+const CHAT_TYPE_LABELS: Record<number, string> = { 1: 'direct', 2: 'group', 3: 'thread group' };
 
 const chats: Command = {
   name: 'chats',
-  help: '列出本地会话;--remote 从服务端拉会话列表(收件箱里的私聊与群聊,按最近变动排序)',
+  help: 'list local chats; --remote fetches the chat list from the server (direct and group chats in the inbox, most recently active first)',
   access: (a) => (a.remote ? 'chats.remote' : 'chats.local'),
   options: [
     { name: 'limit', kind: 'int', default: 50 },
-    { name: 'remote', kind: 'flag', help: '从服务端拉会话列表,而不是读本地库' },
-    { name: 'json', kind: 'flag', help: '与 --remote 一起用,输出 JSON' },
+    {
+      name: 'remote',
+      kind: 'flag',
+      help: 'fetch the chat list from the server instead of the local database',
+    },
+    { name: 'json', kind: 'flag', help: 'output JSON (with --remote)' },
   ],
   async run(a) {
     if (a.remote) {
@@ -850,14 +874,14 @@ const chats: Command = {
       else
         for (const c of list)
           out(
-            `${c.chatId}\t${CHAT_TYPE_LABELS[c.threadChat ? 3 : c.chatType] ?? '?'}\t${c.name || '(未命名)'}\t更新于 ${localDatetime(c.updatedAt)}`,
+            `${c.chatId}\t${CHAT_TYPE_LABELS[c.threadChat ? 3 : c.chatType] ?? '?'}\t${c.name || '(unnamed)'}\tupdated ${localDatetime(c.updatedAt)}`,
           );
       return 0;
     }
     const st = new Storage();
     for (const c of await st.listChats(Number(a.limit)))
       out(
-        `${c.chat_id}\t${CHAT_TYPE_LABELS[c.chat_type] ?? '?'}\t${c.name || '(未命名)'}\t更新于 ${pyDatetime(c.updated_at)}`,
+        `${c.chat_id}\t${CHAT_TYPE_LABELS[c.chat_type] ?? '?'}\t${c.name || '(unnamed)'}\tupdated ${pyDatetime(c.updated_at)}`,
       );
     await st.close();
     return 0;
@@ -866,15 +890,15 @@ const chats: Command = {
 
 const sessions: Command = {
   name: 'sessions',
-  help: '列出 agent 会话(session 表)',
+  help: 'list agent sessions (session table)',
   access: 'sessions',
   options: [{ name: 'limit', kind: 'int', default: 50 }],
   async run(a) {
     const st = new Storage();
     for (const r of await st.listSessions(Number(a.limit))) {
-      const scope = r.anchor ? '话题' : r.session_key === 'global' ? '全局' : '会话';
+      const scope = r.anchor ? 'thread' : r.session_key === 'global' ? 'global' : 'chat';
       out(
-        `${r.session_key}\t${scope}\tchat=${r.chat_id}\tanchor=${r.anchor || '-'}\t${r.started ? '已建立' : '待建立'}\tmsg=${r.msg_count}\t活跃于 ${pyDatetime(r.last_active)}`,
+        `${r.session_key}\t${scope}\tchat=${r.chat_id}\tanchor=${r.anchor || '-'}\t${r.started ? 'started' : 'pending'}\tmsg=${r.msg_count}\tactive ${pyDatetime(r.last_active)}`,
       );
     }
     await st.close();
@@ -884,11 +908,11 @@ const sessions: Command = {
 
 const messages: Command = {
   name: 'messages',
-  help: '读本地消息记录',
+  help: 'read local message history',
   access: 'messages',
   positionals: [{ name: 'chat_id' }],
   options: [
-    { name: 'anchor', kind: 'string', help: '话题 id;空字符串=仅主会话流' },
+    { name: 'anchor', kind: 'string', help: 'thread id; empty string = main chat stream only' },
     { name: 'limit', kind: 'int', default: 50 },
     { name: 'json', kind: 'flag' },
   ],
@@ -915,7 +939,7 @@ const messages: Command = {
 
 const search: Command = {
   name: 'search',
-  help: '搜索用户/群',
+  help: 'search users/groups',
   access: 'search',
   positionals: [{ name: 'query', nargs: '+' }],
   async run(a) {
@@ -926,11 +950,14 @@ const search: Command = {
 
 const api: Command = {
   name: 'api',
-  help: '调任意网关接口(类型名见 docs/cmd_table.md)',
+  help: 'call any gateway endpoint (type names in docs/cmd_table.md)',
   access: 'api',
   positionals: [
-    { name: 'type', help: 'proto 请求类型名(如 chats.PullChatsByIdsRequest)或 cmd 数字' },
-    { name: 'json_body', nargs: '?', help: '请求字段 JSON' },
+    {
+      name: 'type',
+      help: 'proto request type name (e.g. chats.PullChatsByIdsRequest) or cmd number',
+    },
+    { name: 'json_body', nargs: '?', help: 'request fields as JSON' },
   ],
   async run(a) {
     const c = await client();
@@ -939,7 +966,7 @@ const api: Command = {
       try {
         data = parseJsonKeepingBigInts(String(a.json_body)) as Dict;
       } catch (e) {
-        err(`JSON 解析失败: ${(e as Error).message}`);
+        err(`invalid JSON: ${(e as Error).message}`);
         return 1;
       }
     }
@@ -987,7 +1014,7 @@ async function senderNames(
   try {
     return await c.userNames(msgs.map((m) => m.from_id));
   } catch (e) {
-    logger.warning(`查发送者名字失败: ${errorText(e)}`);
+    logger.warning(`failed to look up sender names: ${errorText(e)}`);
     return new Map();
   }
 }
@@ -1002,18 +1029,18 @@ const list = (v: Parsed[string]) =>
 
 const searchMessages: Command = {
   name: 'search-messages',
-  help: '跨会话搜消息(同客户端搜索框的"消息")',
+  help: 'search messages across chats (like the client search box "Messages" tab)',
   access: 'search-messages',
   positionals: [{ name: 'query', nargs: '+' }],
   options: [
-    { name: 'chat', kind: 'string', help: '只搜这些会话(chat_id,逗号分隔)' },
-    { name: 'from', kind: 'string', help: '只搜这些人发的(user_id,逗号分隔)' },
+    { name: 'chat', kind: 'string', help: 'only these chats (chat_ids, comma-separated)' },
+    { name: 'from', kind: 'string', help: 'only from these senders (user_ids, comma-separated)' },
     {
       name: 'since',
       kind: 'string',
-      help: '起始时间:30m/2h/3d/1w、2026-10-01、2026-10-01 09:30 或时间戳',
+      help: 'start time: 30m/2h/3d/1w, 2026-10-01, 2026-10-01 09:30, or a timestamp',
     },
-    { name: 'until', kind: 'string', help: '截止时间(格式同 --since)' },
+    { name: 'until', kind: 'string', help: 'end time (same format as --since)' },
     { name: 'limit', kind: 'int', default: 20 },
     { name: 'json', kind: 'flag' },
   ],
@@ -1046,15 +1073,15 @@ const searchMessages: Command = {
 
 const unread: Command = {
   name: 'unread',
-  help: '未读:默认列出有未读的会话;--chat 看某会话的未读消息;--at 只看 @我 的未读消息',
+  help: 'unread: lists chats with unread messages; --chat shows unread messages in a chat; --at shows only unread messages that @mention you',
   access: 'unread',
   options: [
-    { name: 'chat', kind: 'string', help: '只看这个会话的未读消息' },
-    { name: 'at', kind: 'flag', help: '各会话里 @我(或 @所有人)的未读消息' },
+    { name: 'chat', kind: 'string', help: 'show unread messages in this chat' },
+    { name: 'at', kind: 'flag', help: 'unread messages that @mention you (or @all) across chats' },
     {
       name: 'since',
       kind: 'string',
-      help: '只看这之后有变动的会话(默认 30d;格式同 search-messages)',
+      help: 'only chats active since this time (default 30d; same format as search-messages)',
     },
     NAMES_OPTION,
     { name: 'json', kind: 'flag' },
@@ -1078,7 +1105,7 @@ const unread: Command = {
     else
       for (const u of chats)
         out(
-          `${u.chatId}\t${CHAT_TYPE_LABELS[u.threadChat ? 3 : u.chatType] ?? '?'}\t${u.name || '(未命名)'}\t未读 ${u.unread}${u.unreadThreads ? `,新话题 ${u.unreadThreads}` : ''}`,
+          `${u.chatId}\t${CHAT_TYPE_LABELS[u.threadChat ? 3 : u.chatType] ?? '?'}\t${u.name || '(unnamed)'}\tunread ${u.unread}${u.unreadThreads ? `, new threads ${u.unreadThreads}` : ''}`,
         );
     return 0;
   },
@@ -1086,7 +1113,7 @@ const unread: Command = {
 
 const members: Command = {
   name: 'members',
-  help: '列出会话成员(id、名字、类型 user/bot)',
+  help: 'list chat members (id, name, type user/bot)',
   access: 'members',
   positionals: [{ name: 'chat_id' }],
   options: [{ name: 'json', kind: 'flag' }],
@@ -1100,7 +1127,7 @@ const members: Command = {
 
 const users: Command = {
   name: 'users',
-  help: '按用户 id 查名字(批量)',
+  help: 'look up names by user id (batch)',
   access: 'users',
   positionals: [{ name: 'user_ids', nargs: '+' }],
   options: [{ name: 'json', kind: 'flag' }],
@@ -1110,18 +1137,18 @@ const users: Command = {
     if (a.json) printJson(Object.fromEntries(names));
     else for (const id of ids) if (names.has(id)) out(`${id}\t${names.get(id)}`);
     const missing = ids.filter((id) => !names.has(id));
-    if (missing.length) err(`查不到: ${missing.join(', ')}`);
+    if (missing.length) err(`not found: ${missing.join(', ')}`);
     return missing.length ? 1 : 0;
   },
 };
 
 const getCmd: Command = {
   name: 'get',
-  help: '按消息 id 取消息(可跨会话;引用回复的原文、链接里的消息都能取)',
+  help: 'fetch messages by id (any chat, including quoted originals and messages from links)',
   access: 'get',
   positionals: [{ name: 'message_ids', nargs: '+' }],
   options: [
-    { name: 'save', kind: 'flag', help: '同时写入本地库' },
+    { name: 'save', kind: 'flag', help: 'also save to the local database' },
     NAMES_OPTION,
     { name: 'json', kind: 'flag' },
   ],
@@ -1132,19 +1159,19 @@ const getCmd: Command = {
     await saveAll(msgs, Boolean(a.save));
     printMessages(msgs, Boolean(a.json), await senderNames(c, msgs, Boolean(a.names)));
     const missing = ids.filter((id) => !msgs.some((m) => m.msg_id === id));
-    if (missing.length) err(`找不到消息: ${missing.join(', ')}`);
+    if (missing.length) err(`message not found: ${missing.join(', ')}`);
     return missing.length ? 1 : 0;
   },
 };
 
 const thread: Command = {
   name: 'thread',
-  help: '拉取一个话题:根消息加最近的回复',
+  help: 'fetch a thread: the root message plus recent replies',
   access: 'thread',
-  positionals: [{ name: 'root_id', help: '话题根消息 id(即消息的 anchor)' }],
+  positionals: [{ name: 'root_id', help: 'thread root message id (the message anchor)' }],
   options: [
-    { name: 'count', kind: 'int', default: 50, help: '最多取多少条回复' },
-    { name: 'save', kind: 'flag', help: '同时写入本地库' },
+    { name: 'count', kind: 'int', default: 50, help: 'maximum number of replies' },
+    { name: 'save', kind: 'flag', help: 'also save to the local database' },
     NAMES_OPTION,
     { name: 'json', kind: 'flag' },
   ],
@@ -1152,7 +1179,7 @@ const thread: Command = {
     const c = await client();
     const msgs = await c.threadMessages(String(a.root_id), Number(a.count));
     if (!msgs.length) {
-      err(`找不到话题根消息: ${a.root_id}`);
+      err(`thread root message not found: ${a.root_id}`);
       return 1;
     }
     await saveAll(msgs, Boolean(a.save));
@@ -1170,19 +1197,23 @@ async function saveAll(msgs: LarkMessage[], save: boolean): Promise<void> {
 
 const history: Command = {
   name: 'history',
-  help: '拉取会话历史消息',
+  help: 'fetch chat history',
   access: 'history',
   positionals: [{ name: 'chat_id' }],
   options: [
-    { name: 'start', kind: 'int', help: '起始 position(默认从最新往前)' },
+    { name: 'start', kind: 'int', help: 'start position (default: newest, going backwards)' },
     { name: 'count', kind: 'int', default: 20 },
     {
       name: 'since',
       kind: 'string',
-      help: '只要这之后的消息(30m/2h/3d、2026-10-01 09:30 或时间戳;取范围内最新的 count 条)',
+      help: 'only messages after this time (30m/2h/3d, 2026-10-01 09:30, or a timestamp; takes the newest count in range)',
     },
-    { name: 'until', kind: 'string', help: '只要这之前的消息(格式同 --since)' },
-    { name: 'save', kind: 'flag', help: '同时写入本地库' },
+    {
+      name: 'until',
+      kind: 'string',
+      help: 'only messages before this time (same format as --since)',
+    },
+    { name: 'save', kind: 'flag', help: 'also save to the local database' },
     NAMES_OPTION,
     { name: 'json', kind: 'flag' },
   ],
@@ -1208,7 +1239,7 @@ const history: Command = {
       );
       await st?.close();
       printMessages(msgs, Boolean(a.json), await senderNames(c, msgs, Boolean(a.names)));
-      if (a.save) out(`已入库 ${msgs.length} 条`);
+      if (a.save) out(`saved ${msgs.length} messages`);
       return 0;
     }
     let start: number;
@@ -1216,7 +1247,7 @@ const history: Command = {
     else {
       const info = await c.getChatInfo(chatId);
       if (!info?.lastMessagePosition) {
-        err('拿不到会话的最新 position,请用 --start 指定');
+        err('could not get the latest chat position; pass --start');
         return 1;
       }
       start = Number(info.lastMessagePosition) - count + 1;
@@ -1240,20 +1271,26 @@ const history: Command = {
     );
     await st?.close();
     printMessages(msgs, Boolean(a.json), await senderNames(c, msgs, Boolean(a.names)));
-    if (a.save) out(`已入库 ${msgs.length} 条`);
+    if (a.save) out(`saved ${msgs.length} messages`);
     return 0;
   },
 };
 
 const downloadCmd: Command = {
   name: 'download',
-  help: '下载消息里的图片/文件等资源',
+  help: 'download images, files and other resources from a message',
   access: 'download',
-  positionals: [{ name: 'msg_id', nargs: '?', help: '消息 id(从本地库查资源 key)' }],
+  positionals: [
+    {
+      name: 'msg_id',
+      nargs: '?',
+      help: 'message id (resource key looked up in the local database)',
+    },
+  ],
   options: [
-    { name: 'key', kind: 'string', help: '直接指定资源 key(img_v3_*/file_v3_*),需配合 --chat' },
-    { name: 'chat', kind: 'string', help: 'chat_id(配合 --key 或加速本地查找)' },
-    { name: 'out', short: '-o', kind: 'string', required: true, help: '保存路径' },
+    { name: 'key', kind: 'string', help: 'resource key (img_v3_*/file_v3_*); requires --chat' },
+    { name: 'chat', kind: 'string', help: 'chat_id (with --key, or to speed up the local lookup)' },
+    { name: 'out', short: '-o', kind: 'string', required: true, help: 'output path' },
   ],
   async run(a) {
     const la = new LarkAuth();
@@ -1263,7 +1300,7 @@ const downloadCmd: Command = {
     let url: string;
     if (a.key) {
       if (!a.chat) {
-        err('--key 需要配合 --chat <chat_id>');
+        err('--key requires --chat <chat_id>');
         return 1;
       }
       url = messageResourceUrl(msgId || '0', String(a.key), String(a.chat), fileHost);
@@ -1284,27 +1321,27 @@ const downloadCmd: Command = {
         found = (await c.getMessages([msgId]))[0];
       }
       if (!found) {
-        err(`未找到消息 ${msgId}(可用 --key/--chat 直接指定)`);
+        err(`message ${msgId} not found (use --key/--chat to specify the resource directly)`);
         return 1;
       }
       const key = extractResourceKey(found.msg_type, found.content_data);
       if (!key) {
-        err(`消息 ${msgId} 类型为 ${found.msg_type_name},没有可下载资源`);
+        err(`message ${msgId} is ${found.msg_type_name} and has nothing to download`);
         return 1;
       }
       url = messageResourceUrl(found.msg_id, key, found.chat_id, fileHost);
     }
     const [path, contentType, n] = await download(la, url, String(a.out));
-    out(`已下载: ${path} (${contentType}, ${n} 字节)`);
+    out(`downloaded: ${path} (${contentType}, ${n} bytes)`);
     return 0;
   },
 };
 
 async function askLoginChoice(): Promise<'qr' | 'cookie' | 'quit'> {
-  out('  [1] 扫码登录(推荐)');
-  out('  [2] 粘贴 cookie 登录');
-  out('  [q] 退出');
-  const c = (await readLine('选择: ')).trim().toLowerCase();
+  out('  [1] log in with QR code (recommended)');
+  out('  [2] log in by pasting a cookie');
+  out('  [q] quit');
+  const c = (await readLine('choice: ')).trim().toLowerCase();
   return c === '1' ? 'qr' : c === '2' ? 'cookie' : 'quit';
 }
 
@@ -1318,7 +1355,7 @@ async function interactiveLogin(): Promise<LarkAuth> {
   }
   if (!process.stdin.isTTY) throw new AuthExpired(msg);
   out(
-    `凭证缺失或已失效(区域: ${la.region.name},切换区域用 lark auth qr --region <feishu|lark|lark-jp>): ${msg}`,
+    `credentials missing or expired (region: ${la.region.name}; to switch, use lark auth qr --region <feishu|lark|lark-jp>): ${msg}`,
   );
   for (;;) {
     const choice = await askLoginChoice();
@@ -1328,12 +1365,12 @@ async function interactiveLogin(): Promise<LarkAuth> {
         if ((await fresh.validate())[0]) return fresh;
       }
     } else if (choice === 'cookie') {
-      const cookieStr = (await readLine('粘贴完整 cookie 后回车: ')).trim();
+      const cookieStr = (await readLine('paste the full cookie and press Enter: ')).trim();
       try {
         await la.importCookieString(cookieStr);
         return la;
       } catch (e) {
-        out(`导入失败: ${(e as Error).message}`);
+        out(`import failed: ${(e as Error).message}`);
       }
     } else process.exit(1);
   }
@@ -1349,7 +1386,7 @@ async function tagChats(c: LarkClient, wanted: string[]): Promise<Set<string>> {
   for (const w of wanted) {
     const g = groups.find((x) => x.id === w || x.name === w);
     if (!g) {
-      logger.warning(`找不到会话标签: ${w}`);
+      logger.warning(`chat tag not found: ${w}`);
       continue;
     }
     for (const id of await c.feedGroupChats(g.id)) chats.add(id);
@@ -1359,7 +1396,7 @@ async function tagChats(c: LarkClient, wanted: string[]): Promise<Set<string>> {
 
 const tags: Command = {
   name: 'tags',
-  help: '会话标签(分组):不带参数列出标签;带标签名或 id 列出其中的会话',
+  help: 'chat tags: no arguments lists tags; a tag name or id lists its chats',
   access: 'tags',
   positionals: [{ name: 'tag', nargs: '?' }],
   options: [{ name: 'json', kind: 'flag' }],
@@ -1374,7 +1411,7 @@ const tags: Command = {
     const groups = await c.feedGroups();
     const g = groups.find((x) => x.id === a.tag || x.name === a.tag);
     if (!g) {
-      err(`找不到会话标签: ${a.tag}`);
+      err(`chat tag not found: ${a.tag}`);
       return 1;
     }
     const ids = await c.feedGroupChats(g.id);
@@ -1393,7 +1430,7 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
   }
   if (agentEnabled && !la.userId) {
     err(
-      '无法确定当前账号 user_id,--agent 存在自回环风险,已拒绝启动。请先 lark auth check 确认凭证有效。',
+      'cannot determine the current user_id; refusing to start --agent because it could reply to itself. Run lark auth check to verify your credentials.',
     );
     process.exit(1);
   }
@@ -1401,14 +1438,14 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
   const line = '─'.repeat(56);
   out(line);
   out(
-    `LarkAgentX 启动  region=${la.region.name}  user=${la.userId}  device=${head(la.deviceId, 12)}…`,
+    `LarkAgentX started  region=${la.region.name}  user=${la.userId}  device=${head(la.deviceId, 12)}…`,
   );
-  out(`  存储: ${cfg.storage_url}`);
+  out(`  storage: ${cfg.storage_url}`);
   out(
-    `  上下文边界: ${cfg.context_scope}  agent后端: ${cfg.agent_backend}${agentEnabled ? '  (已启用)' : '  (未启用,仅入库)'}`,
+    `  context scope: ${cfg.context_scope}  agent backend: ${cfg.agent_backend}${agentEnabled ? '  (enabled)' : '  (disabled, storing only)'}`,
   );
   out(
-    `  触发前缀: ${cfg.triggers.prefix || '(全部消息)'}  自定义提示词: ${cfg.system_prompt ? '有' : '无'}`,
+    `  trigger prefix: ${cfg.triggers.prefix || '(all messages)'}  custom prompt: ${cfg.system_prompt ? 'yes' : 'no'}`,
   );
   out(line);
   const dispatcher = agentEnabled
@@ -1421,7 +1458,7 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
       try {
         dispatcher.setTagChats(await tagChats(c, cfg.triggers.include_tags));
       } catch (e) {
-        logger.warning(`解析会话标签失败: ${errorText(e)}`);
+        logger.warning(`failed to resolve chat tags: ${errorText(e)}`);
       }
     };
     await refresh();
@@ -1452,7 +1489,7 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
         content: m.content,
       };
     } catch (e) {
-      logger.debug(`取被引用消息失败: ${errorText(e)}`);
+      logger.debug(`failed to fetch quoted message: ${errorText(e)}`);
       return undefined;
     }
   };
@@ -1478,11 +1515,11 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
     // Recalls and edits are re-pushed as the same message: recalled ones are no longer passed to the agent; edited ones update the stored content and let the agent see the new content
     if (msg.recalled) {
       dispatcher?.withdraw(msg.msg_id);
-      if (await st.markRecalled(msg.msg_id, chatId)) logger.info(`${who} 撤回了一条消息`);
+      if (await st.markRecalled(msg.msg_id, chatId)) logger.info(`${who} recalled a message`);
       return;
     }
     if (msg.edited && (await st.reviseMessage(msg))) {
-      logger.info(`${who} 编辑了消息: ${preview(msg.content || '', 80)}`);
+      logger.info(`${who} edited a message: ${preview(msg.content || '', 80)}`);
       await dispatcher?.revise(msg, chatName, senderName, la.userId);
       return;
     }
@@ -1535,7 +1572,7 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
     const senderName = names.get(key) || '';
     const chatName = names.get(chatId) || (await st.getChatName(chatId));
     logger.info(
-      `[${chatName || chatId}] ${senderName || ev.user_id} ${ev.cancelled ? '取消了' : '加了'}表情 ${ev.reaction_type}: ${preview(target.content || '', 40)}`,
+      `[${chatName || chatId}] ${senderName || ev.user_id} ${ev.cancelled ? 'removed' : 'added'} reaction ${ev.reaction_type}: ${preview(target.content || '', 40)}`,
     );
     if (dispatcher && cfg.agent_reactions && target.from_id === la.userId)
       await dispatcher.submitReaction(
@@ -1544,7 +1581,7 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
         {
           id: target.msg_id,
           sender_id: target.from_id,
-          sender_name: '我',
+          sender_name: 'me',
           content: target.content,
         },
         chatName,
@@ -1560,17 +1597,17 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
         knownThreads: (chatId) => st.recentAnchors(chatId),
       }),
   });
-  throw new Error('长连接循环意外退出');
+  throw new Error('long connection loop exited unexpectedly');
 }
 
 const listen: Command = {
   name: 'listen',
-  help: '常驻接收消息',
+  help: 'listen for messages continuously',
   access: 'listen',
-  options: [{ name: 'agent', kind: 'flag', help: '接本地 coding agent 自动回复' }],
+  options: [{ name: 'agent', kind: 'flag', help: 'auto-reply with the local coding agent' }],
   async run(a) {
     process.on('SIGINT', () => {
-      out('\n已停止');
+      out('\nstopped');
       process.exit(0);
     });
     for (;;) {
@@ -1582,7 +1619,7 @@ const listen: Command = {
           err(e.message);
           return 1;
         }
-        out(`运行中凭证失效: ${e.message}`);
+        out(`credentials expired while running: ${e.message}`);
       }
     }
   },
@@ -1590,7 +1627,7 @@ const listen: Command = {
 
 const permissions: Command = {
   name: 'permissions',
-  help: '命令权限:不带参数列出每个命令能否执行;edit 在终端里交互编辑当前账号的规则(替代全局规则),clear 清除',
+  help: "command permissions: no arguments lists whether each command may run; edit opens an interactive editor for this account's rules (replacing the global rules); clear removes them",
   access: (a) => `permissions.${(a.action ?? 'show') as 'show' | 'edit' | 'clear'}`,
   positionals: [{ name: 'action', nargs: '?', choices: ['show', 'edit', 'clear'] }],
   options: [{ name: 'json', kind: 'flag' }],
@@ -1608,7 +1645,7 @@ const permissions: Command = {
         printJson({ source, ...rules, commands: items });
         return 0;
       }
-      out(`生效规则: ${source}`);
+      out(`effective rules: ${source}`);
       out(`allow: ${rules.allow.join(', ') || '-'}`);
       out(`deny: ${rules.deny.join(', ') || '-'}`);
       const width = Math.max(...items.map((i) => i.name.length)) + 2;
@@ -1616,41 +1653,43 @@ const permissions: Command = {
         out(`\n[${group}] ${desc}`);
         for (const i of items.filter((x) => x.group === group))
           out(
-            `  ${i.name.padEnd(width)}${i.allowed ? '允许' : '拒绝'}${i.rule ? `  ${i.rule}` : ''}`,
+            `  ${i.name.padEnd(width)}${i.allowed ? 'allow' : 'deny'}${i.rule ? `  ${i.rule}` : ''}`,
           );
       }
       return 0;
     }
     if (!auth.userId) {
-      err('没有已登录的账号,跟随账号的规则需要先登录(lark auth qr)');
+      err('no logged-in account; per-account rules require login (lark auth qr)');
       return 1;
     }
     if (action === 'clear') {
       saveAccountRules(auth, null);
-      out(`已清除账号 ${auth.userId} 的规则,改用全局规则(LARKX_ALLOW / LARKX_DENY)`);
+      out(
+        `cleared rules for account ${auth.userId}; using global rules (LARKX_ALLOW / LARKX_DENY)`,
+      );
       return 0;
     }
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
       err(
-        'permissions edit 需要在终端里运行;脚本里可改 LARKX_ALLOW / LARKX_DENY 或数据目录的 permissions.json',
+        'permissions edit must run in a terminal; in scripts, set LARKX_ALLOW / LARKX_DENY or edit permissions.json in the data directory',
       );
       return 2;
     }
     const current = loadRules(auth);
     const editor = new PermissionEditor(
       current.rules,
-      `命令权限 · 账号 ${auth.userId}`,
+      `command permissions · account ${auth.userId}`,
       current.own
-        ? '编辑这个账号自己的规则'
-        : '这个账号还没有自己的规则,下面从全局规则复制;保存后整体替代全局规则',
+        ? "editing this account's own rules"
+        : 'this account has no rules of its own; copied from the global rules below. Saving replaces the global rules for this account',
     );
     const rules = await editInTerminal(editor);
     if (!rules || !editor.dirty) {
-      out('未保存,规则没有变化');
+      out('not saved; rules unchanged');
       return 0;
     }
     saveAccountRules(auth, rules);
-    out(`已保存账号 ${auth.userId} 的规则(${permissionsPath(auth)})`);
+    out(`saved rules for account ${auth.userId} (${permissionsPath(auth)})`);
     out(`allow: ${rules.allow.join(', ') || '-'}`);
     out(`deny: ${rules.deny.join(', ') || '-'}`);
     return 0;

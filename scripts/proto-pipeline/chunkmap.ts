@@ -13,7 +13,7 @@ for (const name of BASE_BUNDLES) {
     const res = await fetch(`${CDN_BASE}/${name}.js`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     if (!res.ok)
       throw new Error(
-        `下载基础包 ${name}.js 失败: HTTP ${res.status}（文件名可能已随发版变化，见 README）`,
+        `failed to download base bundle ${name}.js: HTTP ${res.status} (the file name may have changed with a release; see README)`,
       );
     await Bun.write(path, await res.arrayBuffer());
   }

@@ -54,7 +54,7 @@ export async function download(
     async function* (chunks: AsyncIterable<Uint8Array>) {
       for await (const chunk of chunks) {
         n += chunk.length;
-        if (n > MAX_BYTES) throw new Error('文件过大');
+        if (n > MAX_BYTES) throw new Error('file too large');
         yield chunk;
       }
     },
@@ -69,9 +69,9 @@ export async function downloadMessageResource(
   outPath: string,
 ): Promise<[string, string, number]> {
   const key = extractResourceKey(msg.msg_type, msg.content_data);
-  if (!key) throw new Error('该消息没有可下载的资源');
+  if (!key) throw new Error('this message has no downloadable resource');
   const url = messageResourceUrl(msg.msg_id, key, msg.chat_id, urls.fileHost(auth.region));
-  logger.info(`下载资源: ${url}`);
+  logger.info(`downloading resource: ${url}`);
   return download(auth, url, outPath);
 }
 
@@ -121,8 +121,8 @@ export async function uploadImage(
   const res = await postForm(auth, `${urls.fileHost(auth.region)}/api/image`, 'image', data, name);
   // The response is plain text: a status prefix followed by the key (the web client uses text.slice(2)); here the key is extracted by its shape
   const key = /img_[\w-]+/.exec(await res.text())?.[0];
-  if (!key) throw new Error('图片上传失败: 响应里没有图片 key');
-  logger.info(`图片已上传: ${key} (${data.length} 字节)`);
+  if (!key) throw new Error('image upload failed: no image key in response');
+  logger.info(`image uploaded: ${key} (${data.length} bytes)`);
   return key;
 }
 
@@ -141,9 +141,11 @@ export async function uploadFile(
     data?: { key?: string; name?: string; size?: number; mimetype?: string };
   };
   if (body.status !== 'success' || !body.data?.key)
-    throw new Error(`文件上传失败: ${body.message || body.status || '响应里没有文件 key'}`);
+    throw new Error(
+      `file upload failed: ${body.message || body.status || 'no file key in response'}`,
+    );
   const d = body.data;
-  logger.info(`文件已上传: ${d.key} (${d.size ?? data.length} 字节)`);
+  logger.info(`file uploaded: ${d.key} (${d.size ?? data.length} bytes)`);
   return {
     key: String(d.key),
     name: d.name || name,

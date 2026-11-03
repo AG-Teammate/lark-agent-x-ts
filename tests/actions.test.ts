@@ -19,8 +19,8 @@ function capture(c: ReturnType<typeof newClient>, reqType: string) {
   return seen;
 }
 
-describe('撤回、编辑与表情', () => {
-  test('撤回：服务端回 ok 才算成功', async () => {
+describe('recall, edit and reactions', () => {
+  test('recall: succeeds only when the server replies ok', async () => {
     const c = newClient();
     const reqs: [string, Dict][] = [];
     let reply: Dict = { message: 'ok' };
@@ -31,34 +31,38 @@ describe('撤回、编辑与表情', () => {
     await c.recallMessage('7000000000000000001');
     expect(reqs).toEqual([['messages.DeleteMessageRequest', { id: '7000000000000000001' }]]);
     reply = {};
-    await expect(c.recallMessage('7000000000000000001')).rejects.toThrow('撤回失败');
+    await expect(c.recallMessage('7000000000000000001')).rejects.toThrow(
+      'recall failed: not confirmed by server',
+    );
   });
 
-  test('编辑：文本按 TEXT、结构化内容按 POST 整条替换，消息 id 按 int64 发送', async () => {
+  test('edit: text replaces as TEXT, structured content as POST; message id sent as int64', async () => {
     const c = newClient();
     const seen = capture(c, 'messages.EditMessageRequest');
     await c.editMessage('7000000000000000001', {
-      text: '改过的 [文档](https://example.com/d)',
+      text: 'Edited [doc](https://example.com/d)',
       links: true,
     });
     await c.editMessage('7000000000000000002', {
-      blocks: [{ type: 'p', runs: [{ text: '结论：', bold: true }, { text: '周五上线' }] }],
-      text: '结论：周五上线',
+      blocks: [
+        { type: 'p', runs: [{ text: 'Conclusion: ', bold: true }, { text: 'ship on Friday' }] },
+      ],
+      text: 'Conclusion: ship on Friday',
     });
     expect(seen.map((s) => [s.cmd, s.body.msgId, s.body.type])).toEqual([
       [900010, 7000000000000000001n, 4],
       [900010, 7000000000000000002n, 2],
     ]);
     const rt = (s: { body: Dict }) => (s.body.content as Dict).richText as Dict;
-    expect(extractRichText(rt(seen[0] as { body: Dict }))).toBe('改过的 '); // link elements are not counted in the plain-text summary
+    expect(extractRichText(rt(seen[0] as { body: Dict }))).toBe('Edited '); // link elements are not counted in the plain-text summary
     expect(rt(seen[0] as { body: Dict }).anchorIds).toEqual(['2']);
-    expect(extractRichText(rt(seen[1] as { body: Dict }))).toBe('结论：周五上线');
+    expect(extractRichText(rt(seen[1] as { body: Dict }))).toBe('Conclusion: ship on Friday');
     expect(seen.every((s) => typeof s.body.cid === 'string' && s.body.cid.length === 10)).toBe(
       true,
     );
   });
 
-  test('表情：加、去与查询（加过的人取自更新时间表）', async () => {
+  test('reactions: add, remove and query (reactors taken from the update-time table)', async () => {
     const c = newClient();
     const reqs: [string, Dict][] = [];
     c.api = async (type, data) => {
@@ -95,12 +99,17 @@ describe('撤回、编辑与表情', () => {
   });
 });
 
-describe('Markdown 消息', () => {
-  test('整段放进一个 MARKDOWN 元素并登记 markdownIds；解码时按原文取回', async () => {
+describe('Markdown messages', () => {
+  test('whole text goes into one MARKDOWN element registered in markdownIds; decoding returns the original', async () => {
     const { buildMarkdownMessagePacket } = await import('../src/proto/builders.js');
     const { decodeMessageContent } = await import('../src/proto/decoders.js');
-    const md = '## 结论\n\n- 周五上线\n\n```ts\nconst a = 1;\n```';
-    const pkt = buildMarkdownMessagePacket(md, { chatId: 'c1' }, 'r1', '周报') as unknown as {
+    const md = '## Conclusion\n\n- ship on Friday\n\n```ts\nconst a = 1;\n```';
+    const pkt = buildMarkdownMessagePacket(
+      md,
+      { chatId: 'c1' },
+      'r1',
+      'Weekly report',
+    ) as unknown as {
       cmd: number;
       payload: Uint8Array;
     };
@@ -108,7 +117,7 @@ describe('Markdown 消息', () => {
       protoType('PutMessageRequest'),
       fromBinary(protoType('PutMessageRequest'), pkt.payload),
     );
-    expect([pkt.cmd, req.type, (req.content as Dict).title]).toEqual([5, 2, '周报']);
+    expect([pkt.cmd, req.type, (req.content as Dict).title]).toEqual([5, 2, 'Weekly report']);
     const rt = (req.content as Dict).richText as Dict;
     expect([rt.elementIds, rt.markdownIds, rt.innerText]).toEqual([['1'], ['1'], md]);
     const el = ((rt.elements as Dict).dictionary as Record<string, Dict>)['1'] as Dict;
@@ -116,14 +125,17 @@ describe('Markdown 消息', () => {
     expect(extractRichText(rt)).toBe(md);
     const content = toBinary(
       protoType('PostContent'),
-      create(protoType('PostContent'), { title: '周报', richText: rt } as Record<string, unknown>),
+      create(protoType('PostContent'), { title: 'Weekly report', richText: rt } as Record<
+        string,
+        unknown
+      >),
     );
-    expect(decodeMessageContent(2, content)[0]).toBe(`[富文本] 周报\n${md}`);
+    expect(decodeMessageContent(2, content)[0]).toBe(`[Rich text] Weekly report\n${md}`);
   });
 });
 
-describe('已读情况', () => {
-  test('发送方视角的已读/未读名单，与我自己是否读过', async () => {
+describe('read status', () => {
+  test("read/unread lists from the sender's view, and whether I have read it", async () => {
     const c = newClient();
     const reqs: [string, Dict][] = [];
     c.api = async (type, data) => {
@@ -167,8 +179,8 @@ describe('已读情况', () => {
   });
 });
 
-describe('转发', () => {
-  test('每个目标会话各带一个 cid，返回会话 → 新消息 id，没转成的不在结果里', async () => {
+describe('forwarding', () => {
+  test('one cid per target chat; returns chat → new message id, omitting failures', async () => {
     const c = newClient();
     let req: Dict = {};
     c.api = async (type, data) => {
@@ -185,8 +197,8 @@ describe('转发', () => {
   });
 });
 
-describe('标记', () => {
-  test('标记消息与会话、取消标记、按游标翻页列出并带上消息', async () => {
+describe('flags', () => {
+  test('flag messages and chats, unflag, list by cursor with messages attached', async () => {
     const c = newClient();
     const reqs: [string, Dict][] = [];
     const pages: Dict[] = [
@@ -227,8 +239,8 @@ describe('标记', () => {
   });
 });
 
-describe('Pin 与会话置顶', () => {
-  test('Pin、按消息找到 pin id 后取消、列出 Pin（带消息）', async () => {
+describe('pins and pinned chats', () => {
+  test('pin, unpin by finding the pin id from the message, list pins (with messages)', async () => {
     const c = newClient();
     const reqs: [string, Dict][] = [];
     c.api = async (type, data) => {
@@ -275,7 +287,7 @@ describe('Pin 与会话置顶', () => {
     ]);
   });
 
-  test('会话置顶：只取会话类型，按位置排序；增删带上类型', async () => {
+  test('pinned chats: chat entries only, sorted by position; add/remove carry the type', async () => {
     const c = newClient();
     const reqs: [string, Dict][] = [];
     c.api = async (type, data) => {
@@ -308,8 +320,8 @@ describe('Pin 与会话置顶', () => {
   });
 });
 
-describe('定时消息', () => {
-  test('定时发送把发送包装进 putRequest，时间按秒；列出、改时间、取消', async () => {
+describe('scheduled messages', () => {
+  test('schedule wraps the send in putRequest with time in seconds; list, reschedule, cancel', async () => {
     const c = newClient();
     c.isThreadChat = async () => false;
     let scheduleReq: Dict = {};
@@ -327,7 +339,9 @@ describe('定时消息', () => {
       );
     };
     expect(
-      await c.scheduleMessage('c1', { markdown: '**周报**' }, 1_790_000_600_500, { rootId: 'r1' }),
+      await c.scheduleMessage('c1', { markdown: '**Weekly report**' }, 1_790_000_600_500, {
+        rootId: 'r1',
+      }),
     ).toBe('7000000000000000201');
     expect([scheduleReq.scheduleTime, scheduleReq.chatId, scheduleReq.entityId]).toEqual([
       1_790_000_600n,

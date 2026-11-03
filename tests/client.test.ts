@@ -10,8 +10,8 @@ import fixtures from './fixtures/parity.json';
 const newClient = (): LarkClient =>
   new (LarkClient as unknown as new (auth: LarkAuth) => LarkClient)({ userId: 'me' } as LarkAuth);
 
-describe('网关客户端', () => {
-  test('标已读：主会话按 position、话题回复按话题推进，话题请求用根消息 position 作 maxPosition', async () => {
+describe('gateway client', () => {
+  test('mark read: main chat advances by position, topic replies by topic; topic requests use the root position as maxPosition', async () => {
     const c = newClient();
     const calls: [string, Dict][] = [];
     const messages: Record<string, Dict> = {
@@ -46,11 +46,11 @@ describe('网关客户端', () => {
         messageIds: ['t1', 't2'],
       },
     ]);
-    await expect(c.readMessages('c1', ['m1', 'nope'])).rejects.toThrow('找不到消息: nope');
-    await expect(c.readMessages('c1', ['x1'])).rejects.toThrow('消息 x1 不在会话 c1 里');
+    await expect(c.readMessages('c1', ['m1', 'nope'])).rejects.toThrow('message not found: nope');
+    await expect(c.readMessages('c1', ['x1'])).rejects.toThrow('message x1 is not in chat c1');
   });
 
-  test('recentChats：从新到旧翻页，只取 since 之后变动的会话卡片，翻到更旧的就停', async () => {
+  test('recentChats: pages newest to oldest, keeps only cards changed after since, stops at older ones', async () => {
     const c = newClient();
     const sec = 1_791_900_000;
     const card = (id: string, type: number, t: number) => ({
@@ -97,7 +97,7 @@ describe('网关客户端', () => {
             id: 'g1',
             type: 2,
             chatMode: 1,
-            name: '项目协作群',
+            name: 'Project team',
             newMessageCount: 2,
             memberCount: 5,
           },
@@ -119,15 +119,15 @@ describe('网关客户端', () => {
     c.chatMembers = async (id) =>
       id === 'p1'
         ? [
-            { id: 'me', name: '我自己', type: 'user' },
-            { id: 'u1', name: '同事甲', type: 'user' },
+            { id: 'me', name: 'Myself', type: 'user' },
+            { id: 'u1', name: 'Colleague A', type: 'user' },
           ]
-        : [{ id: 'me', name: '我自己', type: 'user' }];
+        : [{ id: 'me', name: 'Myself', type: 'user' }];
     const got = await c.listChats(3);
     expect(got.map((x) => [x.chatId, x.name, x.chatType, x.unread, x.updatedAt])).toEqual([
-      ['g1', '项目协作群', 2, 2, 50],
-      ['p1', '同事甲', 1, 0, 30],
-      ['self', '我自己', 1, 0, 20],
+      ['g1', 'Project team', 2, 2, 50],
+      ['p1', 'Colleague A', 1, 0, 30],
+      ['self', 'Myself', 1, 0, 20],
     ]);
     // The limit is reached on the second page, so the third is never requested
     expect(reqs.map((r) => [r.pullType, r.cursor])).toEqual([
@@ -138,41 +138,41 @@ describe('网关客户端', () => {
     expect((await c.listChats(1, { peerNames: false }))[0]?.chatId).toBe('g1');
   });
 
-  test('发送失败（网络或响应里没有消息 id）返回 null，不抛错', async () => {
+  test('send failure (network, or no message id in the response) returns null without throwing', async () => {
     const c = newClient();
     c.sendRetryDelayMs = 0;
     c.isThreadChat = async () => false;
     c.gatewayPost = async () => {
-      throw new NetworkError('网络请求失败(x): Read timed out');
+      throw new NetworkError('Network request failed (x): Read timed out');
     };
-    expect(await c.sendMsg('收到', 'c1')).toBeNull();
+    expect(await c.sendMsg('Got it', 'c1')).toBeNull();
     c.gatewayPost = async () => toBinary(protoType('Packet'), create(protoType('Packet')));
-    expect(await c.sendMsg('收到', 'c1')).toBeNull();
+    expect(await c.sendMsg('Got it', 'c1')).toBeNull();
     const ok = Buffer.from(fixtures.responses.put_message.bytes, 'base64');
     c.gatewayPost = async () => Uint8Array.from(ok);
-    expect(await c.sendMsg('收到', 'c1', { rootId: 'r1' })).toBe('7000000000000000009');
+    expect(await c.sendMsg('Got it', 'c1', { rootId: 'r1' })).toBe('7000000000000000009');
   });
 
-  test('sendMessage 失败时抛错：网络错误原样抛出，拿不到消息 id 抛 SendUnconfirmed', async () => {
+  test('sendMessage throws on failure: network errors propagate as-is, a missing message id throws SendUnconfirmed', async () => {
     const c = newClient();
     c.sendRetryDelayMs = 0;
     c.isThreadChat = async () => false;
     c.gatewayPost = async () => {
-      throw new NetworkError('网络请求失败(x): Read timed out');
+      throw new NetworkError('Network request failed (x): Read timed out');
     };
-    await expect(c.sendMessage('c1', { text: '收到' })).rejects.toBeInstanceOf(NetworkError);
+    await expect(c.sendMessage('c1', { text: 'Got it' })).rejects.toBeInstanceOf(NetworkError);
     c.gatewayPost = async () => toBinary(protoType('Packet'), create(protoType('Packet')));
     await expect(
-      c.sendMessage('c1', { blocks: [{ type: 'p', runs: [{ text: '收到' }] }], text: '收到' }),
+      c.sendMessage('c1', { blocks: [{ type: 'p', runs: [{ text: 'Got it' }] }], text: 'Got it' }),
     ).rejects.toBeInstanceOf(SendUnconfirmed);
     const ok = Buffer.from(fixtures.responses.put_message.bytes, 'base64');
     c.gatewayPost = async () => Uint8Array.from(ok);
-    expect(await c.sendMessage('c1', { html: '<p>收到</p>', title: '' })).toBe(
+    expect(await c.sendMessage('c1', { html: '<p>Got it</p>', title: '' })).toBe(
       '7000000000000000009',
     );
   });
 
-  test('发送幂等：失败时用同一个消息 cid 重试；4xx 不重试；SendUnconfirmed 带回 cid', async () => {
+  test('idempotent send: retries reuse the same message cid; 4xx is not retried; SendUnconfirmed carries the cid', async () => {
     const c = newClient();
     c.sendRetryDelayMs = 0;
     c.isThreadChat = async () => false;
@@ -187,17 +187,17 @@ describe('网关客户端', () => {
     let failures = 2;
     c.gatewayPost = async (pkt) => {
       cids.push(sentCid(pkt));
-      if (failures-- > 0) throw new NetworkError('网络请求失败(x): Read timed out');
+      if (failures-- > 0) throw new NetworkError('Network request failed (x): Read timed out');
       return ok;
     };
-    expect(await c.sendMessage('c1', { text: '收到' }, { cid: 'fixedcid01' })).toBe(
+    expect(await c.sendMessage('c1', { text: 'Got it' }, { cid: 'fixedcid01' })).toBe(
       '7000000000000000009',
     );
     expect(cids).toEqual(['fixedcid01', 'fixedcid01', 'fixedcid01']);
     // cid is random by default and stays the same across retries
     cids.length = 0;
     failures = 1;
-    await c.sendMessage('c1', { text: '收到' });
+    await c.sendMessage('c1', { text: 'Got it' });
     expect(cids).toHaveLength(2);
     expect(cids[0]).toBe(cids[1] as string);
     // 4xx means the request itself is wrong; no retry
@@ -206,18 +206,18 @@ describe('网关客户端', () => {
       cids.push(sentCid(pkt));
       throw new HttpError(400, 'Bad Request', 'u');
     };
-    await expect(c.sendMessage('c1', { text: '收到' })).rejects.toBeInstanceOf(HttpError);
+    await expect(c.sendMessage('c1', { text: 'Got it' })).rejects.toBeInstanceOf(HttpError);
     expect(cids).toHaveLength(1);
     // Retries exhausted without a message id: SendUnconfirmed carries the cid so it can be resent later
     c.gatewayPost = async () => toBinary(protoType('Packet'), create(protoType('Packet')));
     const e = (await c
-      .sendMessage('c1', { text: '收到' }, { cid: 'fixedcid02', retries: 1 })
+      .sendMessage('c1', { text: 'Got it' }, { cid: 'fixedcid02', retries: 1 })
       .catch((x) => x)) as SendUnconfirmed;
     expect(e).toBeInstanceOf(SendUnconfirmed);
     expect(e.cid).toBe('fixedcid02');
   });
 
-  test('长连接：带 sid 的帧回 ACK，推送消息按顺序交给回调，话题群根消息归到自己的话题；服务端异常关闭时抛错', async () => {
+  test('persistent connection: frames with sid get an ACK, pushed messages reach the callback in order, thread-group roots form their own topic; abnormal server close throws', async () => {
     const acks: Dict[] = [];
     const server = Bun.serve({
       port: 0,
@@ -247,7 +247,7 @@ describe('网关客户端', () => {
         c.connectWebsocket(
           async (m) => void got.push({ id: m.msg_id, scope: m.scope, anchor: m.anchor }),
         ),
-      ).rejects.toThrow('WS 连接关闭: code=4001 bye');
+      ).rejects.toThrow('WS connection closed: code=4001 bye');
       expect(acks).toEqual([{ cmd: 1, sid: 'sid-1' }]);
       expect(got.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
         { id: '7000000000000000001', scope: 'topic', anchor: '7000000000000000001' },
@@ -259,17 +259,19 @@ describe('网关客户端', () => {
   });
 });
 
-describe('长连接保活', () => {
+describe('persistent connection keepalive', () => {
   const fast = { openTimeoutMs: 200, heartbeatMs: 50, idleTimeoutMs: 120 };
 
-  test('握手无响应时按超时失败，不会一直卡在连接中', async () => {
+  test('fails on handshake timeout instead of hanging while connecting', async () => {
     // Accept TCP connections only, never answer the handshake
     const server = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data() {} } });
     try {
       const c = newClient();
       c.wsTiming = fast;
       c.buildWsUrl = async () => `ws://127.0.0.1:${server.port}`;
-      await expect(c.connectWebsocket(async () => undefined)).rejects.toThrow('WS 握手超时(200ms)');
+      await expect(c.connectWebsocket(async () => undefined)).rejects.toThrow(
+        'WS handshake timed out (200ms)',
+      );
       // Abort mid-handshake: returns immediately
       const abort = new AbortController();
       const pending = c.connectWebsocket(async () => undefined, abort.signal);
@@ -280,7 +282,7 @@ describe('长连接保活', () => {
     }
   });
 
-  test('心跳收不到任何回帧时判定断线；有回帧则保持连接', async () => {
+  test('heartbeat with no frames back counts as disconnected; any frame keeps the connection', async () => {
     let heartbeats = 0;
     let reply = false;
     const server = Bun.serve({
@@ -306,7 +308,7 @@ describe('长连接保活', () => {
       c.wsTiming = fast;
       c.buildWsUrl = async () => `ws://localhost:${server.port}`;
       await expect(c.connectWebsocket(async () => undefined)).rejects.toThrow(
-        'WS 心跳无回应: 120ms 内没有收到任何帧',
+        'WS heartbeat lost: no frames received in 120ms',
       );
       expect(heartbeats).toBeGreaterThanOrEqual(2);
 
@@ -329,7 +331,7 @@ describe('长连接保活', () => {
 });
 
 describe('HTTP', () => {
-  test('cookie 罐跟随重定向、收下途中的 Set-Cookie 并带到后续请求；过期的删除', async () => {
+  test('cookie jar follows redirects, keeps Set-Cookie from the way and sends it on later requests; expired ones are deleted', async () => {
     const seen: string[] = [];
     const server = Bun.serve({
       port: 0,
@@ -359,7 +361,7 @@ describe('HTTP', () => {
     }
   });
 
-  test('网关出错时 HttpError 带上响应 Packet 里的出错原因，报错文案不变', async () => {
+  test('on gateway errors HttpError carries the reason from the response Packet; message text unchanged', async () => {
     const body = toBinary(
       protoType('Packet'),
       create(protoType('Packet'), { sid: 'chat not in thread mode' }),
@@ -388,7 +390,7 @@ describe('HTTP', () => {
     }
   });
 
-  test('非 2xx 的报错格式同 requests；连不上时报网络错误', async () => {
+  test('non-2xx error format matches requests; connection failures raise a network error', async () => {
     const server = Bun.serve({ port: 0, fetch: () => new Response('x', { status: 400 }) });
     try {
       const res = await request(`http://localhost:${server.port}/gw`);
@@ -399,7 +401,7 @@ describe('HTTP', () => {
       server.stop(true);
     }
     await expect(request('http://127.0.0.1:9/x', { timeoutMs: 2000 })).rejects.toThrow(
-      /^网络请求失败/,
+      /^Network request failed \(127\.0\.0\.1:9\): /,
     );
   });
 });
