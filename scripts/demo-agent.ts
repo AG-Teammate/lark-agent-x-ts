@@ -3,9 +3,10 @@ import { type AgentBackend, getBackend } from '../src/agent/backend.js';
 import { AgentDispatcher, type AgentMessage, buildXmlMessage } from '../src/agent/dispatcher.js';
 
 /**
- * 数字人链路演示（迁移自 fork 版 dev/demo_agent_flow.py、demo_pipe_flow.py）：两条样例消息
- * （明确要求回复 / 纯寒暄）交给 agent，打印喂给它的完整提示词。
- * 默认只打印不调用；`--live` 时交给真实后端（Claude Code 会自己决定是否执行 `lark send` 回到 --chat 指定的会话）。
+ * Digital-twin pipeline demo (ported from the fork's dev/demo_agent_flow.py and demo_pipe_flow.py): hands two sample
+ * messages (an explicit reply request / pure small talk) to the agent and prints the full prompt it receives.
+ * By default it only prints without calling; with `--live` it uses the real backend (Claude Code decides on its own
+ * whether to run `lark send` back to the chat given by --chat).
  *
  *   bun scripts/demo-agent.ts --chat <chat_id> [--live]
  */
@@ -46,7 +47,7 @@ const cases: [string, AgentMessage][] = [
   ],
 ];
 
-/** 记下每次喂给 agent 的提示词；非 --live 时不调用真实后端。 */
+/** Record every prompt fed to the agent; without --live the real backend is not called. */
 class SpyBackend implements AgentBackend {
   readonly name = 'spy';
   readonly prompts: string[] = [];

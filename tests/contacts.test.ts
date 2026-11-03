@@ -48,7 +48,7 @@ describe('人名与群成员', () => {
       { chatId: 'g1', limit: 100, cursor: 5n, offset: 'o2' },
       { chatId: 'g1', limit: 100, orderCursor: 9n },
     ]);
-    // 成员里查到的名字进了缓存，不再请求
+    // Names found among members are cached, so no further request
     c.api = async () => {
       throw new Error('不应再请求');
     };

@@ -12,7 +12,7 @@ import { getRegion, urls, webOrigin } from './region.js';
 const logger = getLogger('larkx.media');
 const MAX_BYTES = 200 * 1024 * 1024;
 
-/** 资源下载地址；host 为所属区域的文件主机，不传时取 LARKX_REGION。 */
+/** Resource download URL; host is the region's file host, taken from LARKX_REGION when not given. */
 export function messageResourceUrl(
   msgId: string,
   key: string,
@@ -23,7 +23,7 @@ export function messageResourceUrl(
   return `${h}/download/messages/${msgId}/keys/${key}?chat_id=${chatId}`;
 }
 
-/** 消息内容里的资源 key：图片取 imageKey，文件/视频/语音/表情包取 key。 */
+/** Resource key in message content: imageKey for images, key for files / videos / audio / stickers. */
 export function extractResourceKey(msgType: number, contentData: Dict | null | undefined): string {
   if (!contentData) return '';
   if (msgType === 5) {
@@ -37,7 +37,7 @@ export function extractResourceKey(msgType: number, contentData: Dict | null | u
   return '';
 }
 
-/** 下载到文件（流式写入，超过 200MB 报错）；返回 [路径, content-type, 字节数]。 */
+/** Download to a file (streamed; errors above 200MB); returns [path, content-type, byte count]. */
 export async function download(
   auth: LarkAuth,
   url: string,
@@ -75,7 +75,7 @@ export async function downloadMessageResource(
   return download(auth, url, outPath);
 }
 
-/** 上传后服务端记下的文件：资源 key、文件名、字节数与 MIME。 */
+/** A file as recorded by the server after upload: resource key, file name, byte size, and MIME type. */
 export interface UploadedFile {
   key: string;
   name: string;
@@ -85,7 +85,7 @@ export interface UploadedFile {
 
 const UPLOAD_TIMEOUT_MS = 300_000;
 
-/** 网页客户端上传资源的表单请求（文件主机，cookie 鉴权）。 */
+/** Form request the web client uses to upload resources (file host, cookie auth). */
 async function postForm(
   auth: LarkAuth,
   url: string,
@@ -112,21 +112,21 @@ async function postForm(
   );
 }
 
-/** 上传一张图片，返回图片 key（img_v3_…）；发图片消息前先调它。 */
+/** Upload an image and return its image key (img_v3_…); call this before sending an image message. */
 export async function uploadImage(
   auth: LarkAuth,
   data: Uint8Array,
   name = 'image.png',
 ): Promise<string> {
   const res = await postForm(auth, `${urls.fileHost(auth.region)}/api/image`, 'image', data, name);
-  // 响应是纯文本：一个状态前缀后跟 key（网页客户端取 text.slice(2)），这里直接按 key 的形态取
+  // The response is plain text: a status prefix followed by the key (the web client uses text.slice(2)); here the key is extracted by its shape
   const key = /img_[\w-]+/.exec(await res.text())?.[0];
   if (!key) throw new Error('图片上传失败: 响应里没有图片 key');
   logger.info(`图片已上传: ${key} (${data.length} 字节)`);
   return key;
 }
 
-/** 上传一个文件到某会话（文件归属于会话），返回服务端记下的文件信息；发文件消息前先调它。 */
+/** Upload a file to a chat (files belong to a chat) and return the file info recorded by the server; call this before sending a file message. */
 export async function uploadFile(
   auth: LarkAuth,
   chatId: string,

@@ -1,18 +1,18 @@
 /**
- * 飞书（国内版）与 Lark（国际版）的站点差异。
+ * Site differences between Feishu (China) and Lark (international).
  *
- * 两版共用同一套网页客户端代码与协议：接口路径、proto、access_key 算法完全一致，区别只在域名、
- * 网页端 appId（网关请求头 x-appid）和默认语言。登录时选定区域并写入凭证，之后所有请求都按凭证里的区域取地址
- * （cookie 只对所属域名有效，不能混用）。
+ * Both share the same web client code and protocol: endpoint paths, proto, and the access_key algorithm are identical; they differ only in domains,
+ * the web appId (gateway request header x-appid), and default language. The region is chosen at login and stored in the credentials; all later requests use the hosts of that region
+ * (cookies are only valid for their own domain and cannot be mixed).
  */
 export interface Region {
   name: 'feishu' | 'lark' | 'lark-jp';
   label: string;
   domain: string;
-  /** 页面 `__feishuMeta.teaAppId` 的兜底值；登录后会从 messenger 页面抓取实际值存进凭证。 */
+  /** Fallback for the page's `__feishuMeta.teaAppId`; after login the actual value is scraped from the messenger page and stored in the credentials. */
   webAppId: string;
   locale: string;
-  /** 数据中心独立部署时网关/长连接/文件主机与 `domain` 规则不同（如 Lark 日本），在此覆盖；缺省按 `domain` 推导。 */
+  /** For separately deployed data centers whose gateway / long-connection / file hosts don't follow the `domain` rules (e.g. Lark Japan), override here; otherwise derived from `domain`. */
   hosts?: { api?: string; ws?: string; file?: string };
 }
 
@@ -37,7 +37,7 @@ export const REGIONS: Record<Region['name'], Region> = {
     domain: 'jp.larksuite.com',
     webAppId: '161471',
     locale: 'ja_JP',
-    // 来自 messenger 页面的 window.__domains：登录域是 *.jp.larksuite.com，业务主机却是 *-jp.larksuite.com
+    // From window.__domains on the messenger page: the login domain is *.jp.larksuite.com, but service hosts are *-jp.larksuite.com
     hosts: {
       api: 'internal-api-lark-api-jp.larksuite.com',
       ws: 'msg16-frontier-jp.larksuite.com',

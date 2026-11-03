@@ -39,7 +39,7 @@ afterEach(() => {
   rmSync(home, { recursive: true, force: true });
 });
 
-/** 不联网的凭证：权限只用到 user_id 与凭证路径，create 只调 requireValid。 */
+/** Offline credentials: permissions only use user_id and the credentials path; create only calls requireValid. */
 const fakeAuth = (userId = ME) =>
   ({
     userId,
@@ -139,7 +139,7 @@ describe('库的权限检查', () => {
     expect(checked).toEqual(['listen']);
     await expect(obj.inner()).rejects.toBeInstanceOf(PermissionDenied);
     await expect(obj.outer(() => obj.inner())).rejects.toThrow('deny get');
-    // 并发的外层调用各自检查
+    // Concurrent outer calls are each checked
     await Promise.all([obj.outer(), obj.outer()]);
     expect(checked.filter((p) => p === 'listen')).toHaveLength(4);
   });
@@ -152,7 +152,7 @@ describe('库的权限检查', () => {
       expect(await open.scheduledMessages('c1')).toEqual([]);
 
       const c = await LarkClient.create(fakeAuth(), { permissions: { allow: [], deny: ['api'] } });
-      expect(await c.scheduledMessages('c1')).toEqual([]); // 内部调网关不受 api 规则影响
+      expect(await c.scheduledMessages('c1')).toEqual([]); // internal gateway calls are not subject to the api rule
       const err = await c.api('x').catch((e) => e);
       expect(err).toBeInstanceOf(PermissionDenied);
       expect(err).toMatchObject({ permission: 'api', group: 'system', rule: 'deny api' });
@@ -172,7 +172,7 @@ describe('库的权限检查', () => {
       expect(await c.scheduledMessages('c1')).toEqual([]);
       saveAccountRules(fakeAuth(), { allow: [], deny: ['scheduled'] });
       await expect(c.scheduledMessages('c1')).rejects.toThrow('deny scheduled');
-      // 发送按内容归到 send / send-image / send-file；被拒绝时在联网之前就抛错
+      // Sends map to send / send-image / send-file by content; a denial throws before any network call
       saveAccountRules(fakeAuth(), { allow: [], deny: ['outbound'] });
       await expect(c.sendMessage('c1', { file: new Uint8Array(), name: 'a.txt' })).rejects.toThrow(
         '权限不允许执行 send-file(分组 outbound)',
@@ -234,19 +234,19 @@ describe('权限编辑器', () => {
     expect(ed.rows().map((r) => r.key)).toEqual(['*', ...Object.keys(GROUPS)]);
     expect(line(ed, 'outbound')).toMatch(/outbound\s+拒绝 {2}→ 拒绝/);
 
-    press(ed, 'down', 'down', 'down', 'right'); // 光标到 outbound 并展开
+    press(ed, 'down', 'down', 'down', 'right'); // move cursor to outbound and expand
     expect(ed.rows().some((r) => r.key === 'send')).toBe(true);
     expect(line(ed, 'send')).toMatch(/send\s+继承 {2}→ 拒绝 {2}由 deny outbound 决定/);
 
-    press(ed, 'down', 'a'); // send 单独允许
+    press(ed, 'down', 'a'); // allow send individually
     expect(ed.rules()).toEqual({ allow: ['send'], deny: ['outbound'] });
     expect(line(ed, 'send')).toMatch(/send\s+允许 {2}→ 允许/);
-    press(ed, 'space'); // 允许 → 拒绝
+    press(ed, 'space'); // allow → deny
     expect(ed.rules()).toEqual({ allow: [], deny: ['outbound', 'send'] });
-    press(ed, 'space'); // 拒绝 → 继承
+    press(ed, 'space'); // deny → inherit
     expect(ed.rules()).toEqual({ allow: [], deny: ['outbound'] });
 
-    press(ed, 'left'); // 在子项上折叠，光标回到分组
+    press(ed, 'left'); // collapse on a child; cursor returns to the group
     expect(ed.rows()[ed.cursor]?.key).toBe('outbound');
     press(ed, 'i');
     expect(ed.rules().deny).toEqual([]);
@@ -256,13 +256,13 @@ describe('权限编辑器', () => {
   test('树里没有的规则原样保留；有修改时退出要确认', () => {
     const ed = new PermissionEditor({ allow: [], deny: ['scheduled'] }, '标题', '说明');
     expect(plain(ed.render(200, 100)).join('\n')).toContain('deny scheduled');
-    expect(press(ed, 'q')).toEqual(['quit']); // 没改过直接退出
+    expect(press(ed, 'q')).toEqual(['quit']); // unchanged, so quit directly
 
-    press(ed, 'd'); // 光标在 * 上
+    press(ed, 'd'); // cursor is on *
     expect(ed.rules().deny).toEqual(['scheduled', '*']);
     expect(press(ed, 'q')).toEqual([undefined]);
     expect(ed.confirming).toBe(true);
-    expect(press(ed, 'x')).toEqual([undefined]); // 其他键返回继续编辑
+    expect(press(ed, 'x')).toEqual([undefined]); // other keys return "continue editing"
     expect(press(ed, 'escape', 's')).toEqual([undefined, 'save']);
     expect(ed.handle({ name: 'c', ctrl: true })).toBe('quit');
   });

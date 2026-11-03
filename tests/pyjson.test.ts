@@ -3,7 +3,7 @@ import { parseJsonKeepingBigInts } from '../src/proto/dict.js';
 import { floatRepr, PyFloat, pyBytesRepr, pyDumps } from '../src/pyjson.js';
 import { head, preview } from '../src/text.js';
 
-// 期望值取自 Python 3 的 repr / json.dumps(ensure_ascii=False)
+// Expected values taken from Python 3 repr / json.dumps(ensure_ascii=False)
 describe('Python 兼容的序列化', () => {
   test('float repr', () => {
     const cases: [number, string][] = [

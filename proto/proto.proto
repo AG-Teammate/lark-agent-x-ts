@@ -865,7 +865,7 @@ message GetGroupInfoRequest{
     optional string chatId = 1;
 }
 
-// ===================== 消息内容类型 (2026-07 从官方 web-client-next worklet schema 提取) =====================
+// ===================== Message content types (extracted 2026-07 from the official web-client-next worklet schema) =====================
 
 message Image {
     optional string key = 1;
@@ -1008,7 +1008,7 @@ message LocationContent {
     }
 }
 
-// type = 6 SYSTEM (精简版)
+// type = 6 SYSTEM (trimmed)
 message SystemContentValue {
     repeated Item items = 5;
     optional string link = 6;
@@ -1060,12 +1060,12 @@ message CalendarContent {
     optional string calendar = 1;
 }
 
-// type = 18 GENERAL_CALENDAR (精简版)
+// type = 18 GENERAL_CALENDAR (trimmed)
 message GeneralCalendarContent {
     optional int32 calendarType = 1;
 }
 
-// type = 19 VIDEO_CHAT (精简版)
+// type = 19 VIDEO_CHAT (trimmed)
 message VideoChatContent {
     optional int32 type = 1;
     optional MeetingCard meetingCard = 2;
@@ -1088,14 +1088,14 @@ message EmailContent {
     optional RichText richText = 4;
 }
 
-// type = 24 TODO (精简版)
+// type = 24 TODO (trimmed)
 message TodoOperationContent {
     optional int32 operationType = 1;
     optional string operatorId = 2;
     repeated string targetUserIds = 8;
 }
 
-// ===================== gateway 批量拉取 (improto) =====================
+// ===================== gateway batch fetch (improto) =====================
 
 message ProcessMultiPacketsRequest {
     repeated bytes packets = 1;
@@ -1109,7 +1109,7 @@ message PullMessagesByPositionsResponse {
     map<int32, entities.Message> messages = 1;
 }
 
-// 新版图片/媒体结构 (ImageContent.imageV2)
+// New image/media structure (ImageContent.imageV2)
 message Crypto {
     optional int32 type = 1;  // 1=AES_256_GCM
     optional Cipher cipher = 2;
@@ -1138,7 +1138,7 @@ message ImageSetV2 {
     }
 }
 
-// type = 16 SHARE_CALENDAR_EVENT (精简版)
+// type = 16 SHARE_CALENDAR_EVENT (trimmed)
 message ShareCalendarEventContent {
     optional bytes calendarEvent = 1;
     optional int32 attendeesCount = 2;

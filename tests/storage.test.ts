@@ -43,7 +43,7 @@ test('时间戳格式与 SQLAlchemy 一致', () => {
   expect(nowStamp(new Date(2026, 9, 13, 1, 2, 3, 45))).toBe('2026-10-13 01:02:03.045000');
 });
 
-// MySQL 需要一个可写的空库，例如：
+// MySQL needs a writable empty database, e.g.:
 //   docker run -d --rm -e MYSQL_ROOT_PASSWORD=test -e MYSQL_DATABASE=larkx -p 33306:3306 mysql:8.4
 //   LARKX_TEST_MYSQL_URL=mysql+pymysql://root:test@127.0.0.1:33306/larkx bun test
 type Env = { url: string; cleanup: () => Promise<void> };

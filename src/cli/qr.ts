@@ -1,19 +1,19 @@
 import QRCode from 'qrcode';
 
 /**
- * 终端二维码（对应 Python qrcode 的 print_ascii(invert=True)）：两行模块合成一个字符，
- * 反色显示——浅色模块画成实心块，适合深色背景的终端；外边距 1 个模块。
+ * Terminal QR code (equivalent to Python qrcode's print_ascii(invert=True)): two module rows are combined into one character,
+ * inverted: light modules are drawn as solid blocks, suited to dark-background terminals; 1-module quiet zone.
  */
 export function qrAscii(text: string): string {
   const qr = QRCode.create(text, { errorCorrectionLevel: 'M' });
   const size = qr.modules.size;
   const border = 1;
   const dark = (r: number, c: number) => {
-    // 行数为奇数时最后补的半行按深色处理（反色后为空白），与 Python 版一致
+    // With an odd number of rows, the padded final half-row is treated as dark (blank after inversion), matching the Python version
     if (Math.max(r, c) >= size + border) return true;
     return r >= 0 && c >= 0 && r < size && c < size && Boolean(qr.modules.get(r, c));
   };
-  // 下标 = 上方深色 + 下方深色 × 2；反色后浅色为实心
+  // Index = top dark + bottom dark × 2; after inversion, light is solid
   const codes = ['█', '▄', '▀', ' '];
   const lines: string[] = [];
   for (let r = -border; r < size + border; r += 2) {
@@ -26,7 +26,7 @@ export function qrAscii(text: string): string {
   return lines.join('\n');
 }
 
-/** 保存 PNG 版二维码（扫不了终端二维码时用图片）。 */
+/** Save a PNG version of the QR code (for when the terminal QR code can't be scanned). */
 export function saveQrPng(text: string, path: string): Promise<void> {
   return QRCode.toFile(path, text, { errorCorrectionLevel: 'M', margin: 1, scale: 10 });
 }

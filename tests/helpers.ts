@@ -5,15 +5,15 @@ import type { Dict } from '../src/proto/dict.js';
 import { fromDict } from '../src/proto/dict.js';
 import { protoType } from '../src/proto/registry.js';
 
-/** 不联网的客户端：auth 只带 user_id，网关调用由测试替换 api / gatewayPost。 */
+/** Offline client: auth carries only user_id; tests replace api / gatewayPost for gateway calls. */
 export const newClient = (): LarkClient =>
   new (LarkClient as unknown as new (auth: LarkAuth) => LarkClient)({ userId: 'me' } as LarkAuth);
 
-/** 文本消息的 content 字节。 */
+/** content bytes of a text message. */
 export const textContent = (text: string): Uint8Array =>
   toBinary(protoType('TextContent'), create(protoType('TextContent'), { text }));
 
-/** 实体消息 dict（网关响应里的形态），默认是一条群聊文本消息。 */
+/** Entity message dict (as found in gateway responses); defaults to a group-chat text message. */
 export const entity = (id: string, over: Dict = {}): Dict => ({
   id,
   type: 4,
@@ -25,7 +25,7 @@ export const entity = (id: string, over: Dict = {}): Dict => ({
   ...over,
 });
 
-/** 长连接推送帧（cmd=6）：messages 为实体消息 dict 列表。 */
+/** Long-connection push frame (cmd=6): messages is a list of entity message dicts. */
 export function pushFrame(messages: Dict[], sid = 'sid-1'): Uint8Array {
   const pmr = create(protoType('PushMessagesRequest'), {
     messages: Object.fromEntries(
@@ -46,7 +46,7 @@ export function pushFrame(messages: Dict[], sid = 'sid-1'): Uint8Array {
   );
 }
 
-/** dict → protobuf JSON 可接受的值：bigint 转字符串、字节转 base64。 */
+/** dict → value accepted by protobuf JSON: bigint to string, bytes to base64. */
 function jsonable(d: Dict): Dict {
   const out: Dict = {};
   for (const [k, v] of Object.entries(d))

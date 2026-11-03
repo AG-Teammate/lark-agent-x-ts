@@ -142,13 +142,13 @@ describe('网关客户端', () => {
       '7000000000000000009',
     );
     expect(cids).toEqual(['fixedcid01', 'fixedcid01', 'fixedcid01']);
-    // 默认 cid 随机生成，重试时不变
+    // cid is random by default and stays the same across retries
     cids.length = 0;
     failures = 1;
     await c.sendMessage('c1', { text: '收到' });
     expect(cids).toHaveLength(2);
     expect(cids[0]).toBe(cids[1] as string);
-    // 4xx 是请求本身的问题，不重试
+    // 4xx means the request itself is wrong; no retry
     cids.length = 0;
     c.gatewayPost = async (pkt) => {
       cids.push(sentCid(pkt));
@@ -156,7 +156,7 @@ describe('网关客户端', () => {
     };
     await expect(c.sendMessage('c1', { text: '收到' })).rejects.toBeInstanceOf(HttpError);
     expect(cids).toHaveLength(1);
-    // 重试用完仍拿不到消息 id：SendUnconfirmed 带回 cid，可以之后用它补发
+    // Retries exhausted without a message id: SendUnconfirmed carries the cid so it can be resent later
     c.gatewayPost = async () => toBinary(protoType('Packet'), create(protoType('Packet')));
     const e = (await c
       .sendMessage('c1', { text: '收到' }, { cid: 'fixedcid02', retries: 1 })
@@ -211,14 +211,14 @@ describe('长连接保活', () => {
   const fast = { openTimeoutMs: 200, heartbeatMs: 50, idleTimeoutMs: 120 };
 
   test('握手无响应时按超时失败，不会一直卡在连接中', async () => {
-    // 只接受 TCP 连接、从不回应握手
+    // Accept TCP connections only, never answer the handshake
     const server = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data() {} } });
     try {
       const c = newClient();
       c.wsTiming = fast;
       c.buildWsUrl = async () => `ws://127.0.0.1:${server.port}`;
       await expect(c.connectWebsocket(async () => undefined)).rejects.toThrow('WS 握手超时(200ms)');
-      // 握手中途中止：立即返回
+      // Abort mid-handshake: returns immediately
       const abort = new AbortController();
       const pending = c.connectWebsocket(async () => undefined, abort.signal);
       setTimeout(() => abort.abort(), 20);
@@ -244,7 +244,7 @@ describe('长连接保活', () => {
           const pkt = fromBinary(protoType('Packet'), frame.payload) as unknown as Dict;
           if (pkt.cmd !== 4) return;
           heartbeats++;
-          // 模拟服务端回帧（cmd=200，不带 sid）
+          // Simulate a server reply frame (cmd=200, no sid)
           if (reply) ws.send(data as Uint8Array);
         },
       },

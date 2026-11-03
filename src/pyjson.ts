@@ -1,11 +1,11 @@
 /**
- * 与 Python `json.dumps(obj, ensure_ascii=False, ...)` 输出一致的序列化：
- * 消息库里的 `content_data`、`lark api` 等命令的输出都要与原项目逐字节一致，调用方（如 niuma）按原格式解析。
+ * Serialization matching the output of Python `json.dumps(obj, ensure_ascii=False, ...)`:
+ * `content_data` in the message DB and the output of commands such as `lark api` must be byte-identical to the original project; callers (e.g. niuma) parse the original format.
  *
- * - 无缩进时分隔符为 `, ` 与 `: `；有缩进时为 `,` 与 `: `
- * - bigint 按十进制整数输出（int64 不丢精度）
- * - 整数值的浮点数输出为 `1.0`（Python float 的 repr）
- * - 其他无法序列化的值交给 `fallback`（对应 Python 的 `default=`）
+ * - without indent, separators are `, ` and `: `; with indent, `,` and `: `
+ * - bigint is printed as a decimal integer (no int64 precision loss)
+ * - integer-valued floats are printed as `1.0` (Python float repr)
+ * - other unserializable values go to `fallback` (equivalent to Python's `default=`)
  */
 export type Fallback = (value: unknown) => unknown;
 
@@ -13,7 +13,7 @@ export class PyFloat {
   constructor(readonly value: number) {}
 }
 
-/** Python float 的 repr：最短往返位数；指数 < -4 或 ≥ 16 时用科学计数法（两位以上指数），否则定点并保留 `.0`。 */
+/** Python float repr: shortest round-trip digits; scientific notation (at least two exponent digits) when the exponent is < -4 or ≥ 16, otherwise fixed-point keeping `.0`. */
 export function floatRepr(n: number): string {
   if (Number.isNaN(n)) return 'NaN';
   if (!Number.isFinite(n)) return n > 0 ? 'Infinity' : '-Infinity';
@@ -44,7 +44,7 @@ const ESCAPES: Record<string, string> = {
   '\t': '\\t',
 };
 
-/** ensure_ascii=False 的字符串转义：只转义引号、反斜杠与控制字符。 */
+/** String escaping for ensure_ascii=False: only quotes, backslashes, and control characters are escaped. */
 export function pyString(s: string): string {
   let out = '"';
   for (const ch of s) {
@@ -79,7 +79,7 @@ export function pyDumps(
       return `[${nl}${v.map((x) => enc(x, depth + 1)).join(itemSep + nl)}${close}]`;
     }
     if (isPlainObject(v) || v instanceof Map) {
-      // Map 保留插入顺序（普通对象会把整数键提前），用于需要与 Python dict 顺序一致的场合
+      // Map preserves insertion order (plain objects move integer keys first); used where order must match a Python dict
       const entries =
         v instanceof Map ? [...v].map(([k, x]) => [String(k), x] as const) : Object.entries(v);
       if (entries.length === 0) return '{}';
@@ -101,7 +101,7 @@ function typeName(v: unknown): string {
   return v instanceof Uint8Array ? 'bytes' : (v?.constructor?.name ?? typeof v);
 }
 
-/** Python `str(bytes)`：`b'...'` 形式的 repr，`lark api` 打印原始字节时用。 */
+/** Python `str(bytes)`: repr in `b'...'` form, used when `lark api` prints raw bytes. */
 export function pyBytesRepr(b: Uint8Array): string {
   const hasSingle = b.includes(0x27);
   const hasDouble = b.includes(0x22);

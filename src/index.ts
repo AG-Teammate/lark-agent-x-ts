@@ -1,5 +1,5 @@
-// 库入口：只导出 Node 与 Bun 都能运行的部分（登录凭证、网关客户端、消息长连接、资源下载）。
-// 消息库（Bun.SQL）与本地 agent（Bun.spawn）依赖 Bun，只在 CLI 里用，见 docs/compat.md。
+// Library entry: exports only the parts that run on both Node and Bun (login credentials, gateway client, message long connection, resource download).
+// The message DB (Bun.SQL) and the local agent (Bun.spawn) depend on Bun and are only used by the CLI; see docs/compat.md.
 export { AuthExpired, LarkAuth, QR_STATUS_NAMES, QrLogin } from './auth.js';
 export {
   type ChatMember,

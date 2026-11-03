@@ -1,9 +1,10 @@
 import { floatRepr, PyFloat } from '../../src/pyjson.js';
 
 /**
- * JS 对象字面量解析（schema 注册表里的 protobufjs 风格描述）。为了与原版 Python 产物逐字节一致：
- * 对象用 Map 保持键的原始顺序（普通对象会把数字键提前），浮点数包成 PyFloat 以区分 1 与 1.0，
- * 标识符记成 { __raw__: 名字 }，`!0`/`!1` 为 true/false。
+ * JS object literal parser (for the protobufjs-style descriptors in the schema registry). To stay byte-identical
+ * with the original Python output: objects use a Map to keep the original key order (plain objects move numeric
+ * keys first), floats are wrapped in PyFloat to tell 1 from 1.0, identifiers are recorded as { __raw__: name },
+ * and `!0`/`!1` become true/false.
  */
 export type JsValue = string | number | boolean | null | PyFloat | Raw | JsValue[] | JsObject;
 export type JsObject = Map<string, JsValue>;
@@ -133,7 +134,7 @@ export class JsParser {
   }
 }
 
-/** Python 的 repr（用于把 default 等值原样写进注释）。 */
+/** Python's repr (used to write values such as default verbatim into comments). */
 export function pyRepr(v: JsValue | undefined): string {
   if (v === null || v === undefined) return 'None';
   if (v === true) return 'True';
@@ -161,5 +162,5 @@ export function pyRepr(v: JsValue | undefined): string {
   return `{'__raw__': ${pyRepr(v.__raw__)}}`;
 }
 
-/** Python 的 str()：字符串原样，其余同 repr。 */
+/** Python's str(): strings as-is, everything else like repr. */
 export const pyStr = (v: JsValue | undefined): string => (typeof v === 'string' ? v : pyRepr(v));

@@ -7,7 +7,7 @@ import { larkType, protoType } from '../src/proto/registry.js';
 import { Storage } from '../src/storage/index.js';
 import { entity, newClient, pushFrame } from './helpers.js';
 
-const T = 1_790_000_000; // 断线时刻（秒）
+const T = 1_790_000_000; // disconnect time (seconds)
 const at = (dt: number) => BigInt(T + dt);
 
 describe('补收断线期间的消息', () => {
@@ -140,7 +140,7 @@ describe('补收断线期间的消息', () => {
       ['g1', [10, 11, 12]],
       ['p1', [0, 1, 2, 3]],
     ]);
-    // 单聊没有话题，不查本地话题
+    // 1:1 chats have no threads, so local threads are not queried
     expect(known).toEqual(['g1']);
     expect(reqs.find(([t]) => t === 'thread.PullThreadsByPositionsRequest')?.[1]).toEqual({
       channelId: 't1',

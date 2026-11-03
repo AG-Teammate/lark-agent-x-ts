@@ -1,12 +1,12 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-/** `~` 开头的路径展开为用户主目录。 */
+/** Expand paths starting with `~` to the user's home directory. */
 export function expandUser(p: string): string {
   return p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p;
 }
 
-/** 数据目录（凭证、消息库、二维码）：`LARKX_HOME`，默认 `~/.larkx`。每次读取环境变量，便于测试切换。 */
+/** Data directory (credentials, message DB, QR code): `LARKX_HOME`, default `~/.larkx`. Reads the env var on every call so tests can switch it. */
 export function dataDir(): string {
   return expandUser(process.env.LARKX_HOME || join(homedir(), '.larkx'));
 }
@@ -20,7 +20,7 @@ export interface Triggers {
   include_chats: string[];
   exclude_chats: string[];
   include_senders: string[];
-  /** 只处理这些会话标签（名字或 id）里的会话。 */
+  /** Only handle chats in these chat tags (name or id). */
   include_tags: string[];
   keywords: string[];
   group_at_only: boolean;
@@ -29,13 +29,13 @@ export interface Triggers {
 export interface Config {
   region: string;
   storage_url: string;
-  /** agent 上下文边界：anchor（会话+话题）| chat（会话）| global（全部共享）。 */
+  /** Agent context boundary: anchor (chat + thread) | chat (chat) | global (all shared). */
   context_scope: string;
   agent_backend: string;
   system_prompt: string;
-  /** 收到消息即标已读。 */
+  /** Mark messages as read on receipt. */
   mark_read: boolean;
-  /** 别人对我的消息加 / 取消表情时交给数字人（如把点赞当作同意执行），默认关。 */
+  /** Hand others' reactions added / removed on my messages to the digital twin (e.g. treat a thumbs-up as approval to proceed); off by default. */
   agent_reactions: boolean;
   triggers: Triggers;
 }
@@ -51,7 +51,7 @@ const TRIGGER_ENV: Record<keyof Triggers, string> = {
   group_at_only: 'LARKX_TRIGGER_GROUP_AT_ONLY',
 };
 
-/** 逗号分隔或 JSON 数组。 */
+/** Comma-separated or a JSON array. */
 export function asList(v: string): string[] {
   const s = v.trim();
   if (s.startsWith('[')) {
@@ -72,7 +72,7 @@ export const asBool = (v: string): boolean =>
   ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
 
 /**
- * 生效配置：默认值被 `LARKX_*` 环境变量覆盖（空串视为未设置）。`.env` 由 Bun 在启动时从当前目录自动加载。
+ * Effective config: defaults overridden by `LARKX_*` environment variables (empty string counts as unset). Bun auto-loads `.env` from the current directory at startup.
  */
 export function loadConfig(): Config {
   const env = (key: string) => process.env[`LARKX_${key.toUpperCase()}`] || undefined;

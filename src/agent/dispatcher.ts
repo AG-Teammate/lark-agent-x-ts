@@ -10,7 +10,7 @@ export const INSTRUCTIONS =
   '以上是飞书会话里新到的一条消息(XML 里有会话/发送者/内容)。你是这个数字人,完整对话历史你都有。如果对方也是机器人且只是互相客套寒暄,直接结束不要再接话。';
 export const OUTPUT_RULES = '不需要回复就直接结束,不要解释、不要复述消息。';
 
-/** 被引用（回复）的那条消息：数字人要看到原文才知道对方在接哪句话。 */
+/** The quoted (replied-to) message: the digital twin needs the original text to know what the other party is responding to. */
 export interface QuotedMessage {
   id: string;
   sender_id: string;
@@ -18,14 +18,14 @@ export interface QuotedMessage {
   content: string;
 }
 
-/** 交给 agent 的消息：解码结果加上会话名、发送者名，回复别人时带上被引用的原文。 */
+/** Message handed to the agent: the decoded result plus chat name and sender name, with the quoted original text when replying to someone. */
 export interface AgentMessage extends LarkMessage {
   _chat_name?: string;
   _sender_name?: string;
   _quote?: QuotedMessage;
-  /** 对方编辑了一条已经交给 agent 处理过的消息，这是编辑后的内容。 */
+  /** The other party edited a message that was already handed to the agent; this is the edited content. */
   _edited?: boolean;
-  /** 这不是一条消息，而是对方对 _quote 那条（我发的）消息加了 / 取消了表情。 */
+  /** Not a message: the other party added / removed a reaction on the _quote message (one I sent). */
   _reaction?: { type: string; cancelled: boolean };
 }
 
@@ -35,7 +35,7 @@ export type ReplyFn = (chatId: string, text: string, rootId?: string) => Promise
 export const xmlEscape = (s: string): string =>
   s.replaceAll('&', '&amp;').replaceAll('>', '&gt;').replaceAll('<', '&lt;');
 
-/** xml.sax.saxutils.quoteattr：按内容选引号，换行与制表符转成字符引用。 */
+/** xml.sax.saxutils.quoteattr: picks the quote character based on content; newlines and tabs become character references. */
 export function quoteAttr(s: string): string {
   let v = xmlEscape(s).replaceAll('\n', '&#10;').replaceAll('\r', '&#13;').replaceAll('\t', '&#9;');
   if (v.includes('"')) {
@@ -77,7 +77,7 @@ export function buildXmlMessage(m: AgentMessage): string {
   return lines.join('\n');
 }
 
-/** 一个会话边界一条 FIFO 队列，消息逐条交给 agent，保证同一会话里的回复不乱序。 */
+/** One FIFO queue per chat boundary; messages are handed to the agent one at a time so replies within a chat stay in order. */
 class SessionWorker {
   readonly queue: AgentMessage[] = [];
   private running = false;
@@ -108,12 +108,12 @@ class SessionWorker {
   }
 }
 
-/** 数字人分发：按触发规则筛消息、按会话边界排队，支持 /clear（开新会话）与 /stop（清空排队）。 */
+/** Digital twin dispatcher: filters messages by trigger rules, queues per chat boundary, supports /clear (start a new session) and /stop (clear the queue). */
 export class AgentDispatcher {
   private readonly workers = new Map<string, SessionWorker>();
   private tagChats: Set<string> | null = null;
 
-  /** LARKX_TRIGGER_INCLUDE_TAGS 解析出的会话（这些标签里的 chat_id）。 */
+  /** Chats resolved from LARKX_TRIGGER_INCLUDE_TAGS (the chat_ids in those tags). */
   setTagChats(chatIds: Iterable<string>): void {
     this.tagChats = new Set(chatIds);
   }
@@ -144,7 +144,7 @@ export class AgentDispatcher {
     if (t.include_chats.length && !t.include_chats.map(String).includes(chatId)) return false;
     if (t.exclude_chats.length && t.exclude_chats.map(String).includes(chatId)) return false;
     if (t.include_senders.length && !t.include_senders.map(String).includes(senderId)) return false;
-    // 标签里的会话由 listen 解析后经 setTagChats 给进来；还没解析到时宁可不处理
+    // Tagged chats are resolved by listen and passed in via setTagChats; until they are resolved, err on the side of handling nothing
     if (t.include_tags.length && !this.tagChats?.has(chatId)) return false;
     if (t.keywords.length && !t.keywords.some((kw) => content.includes(kw))) return false;
     if (t.group_at_only && (typeName === 'group' || typeName === 'topic_group') && !msg.at_me)
@@ -188,7 +188,7 @@ export class AgentDispatcher {
     this.enqueue(item);
   }
 
-  /** 对方撤回了消息：还在排队的那条不再交给 agent。返回撤下的条数。 */
+  /** The other party recalled a message: if it is still queued, it is no longer handed to the agent. Returns the number removed. */
   withdraw(msgId: string): number {
     let n = 0;
     for (const w of this.workers.values())
@@ -201,8 +201,8 @@ export class AgentDispatcher {
   }
 
   /**
-   * 对方编辑了消息：还在排队的直接换成新内容；已经处理过的作为一条新消息再交给 agent，并标明是编辑后的内容。
-   * 同样经过触发规则筛选。
+   * The other party edited a message: if still queued, its content is replaced in place; if already handled, it is handed to the agent again as a new message marked as edited.
+   * Also subject to trigger-rule filtering.
    */
   async revise(msg: LarkMessage, chatName = '', senderName = '', myUserId = ''): Promise<void> {
     if (!this.shouldHandle(msg, myUserId)) return;
@@ -218,8 +218,8 @@ export class AgentDispatcher {
   }
 
   /**
-   * 对方对我发的消息加 / 取消了表情：作为一条事件交给 agent（被加表情的消息放在 quote 里）。
-   * 会话、发送人的筛选照常生效；前缀、关键词、群里只认 @我 这几条针对消息内容，表情事件不受它们限制。
+   * The other party added / removed a reaction on a message I sent: handed to the agent as an event (the reacted-to message goes in quote).
+   * Chat and sender filters still apply; the prefix, keyword, and "only @me in groups" rules target message content, so reaction events are exempt from them.
    */
   async submitReaction(
     ev: { message_id: string; reaction_type: string; user_id: string; cancelled: boolean },
@@ -261,7 +261,7 @@ export class AgentDispatcher {
     worker.push(item);
   }
 
-  /** `/clear`、`/stop`（可跟在触发前缀之后）；返回 [命令, 余下内容]，不是命令为 [null, null]。 */
+  /** `/clear`, `/stop` (may follow the trigger prefix); returns [command, remaining content], or [null, null] if not a command. */
   parseCommand(content: string): [string | null, string | null] {
     const prefix = this.cfg.triggers.prefix;
     let c = content.trim();

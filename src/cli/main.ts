@@ -55,9 +55,9 @@ async function main(argv: string[]): Promise<number> {
     }
     if (e instanceof PermissionDenied) {
       process.stderr.write(`${PROG} ${cmd.name}: ${e.message}\n`);
-      return 126; // 同 shell 里"找到了命令但无权执行"
+      return 126; // same as the shell's "command found but not executable"
     }
-    // 凭证失效、网络错误等：只打印原因（对应原项目未捕获异常的最后一行），不打印调用栈
+    // Invalid credentials, network errors, etc.: print only the reason (matching the last line of an uncaught exception in the original project), no stack trace
     const name = e instanceof AuthExpired ? 'AuthExpired' : (e as Error).name || 'Error';
     process.stderr.write(`${name}: ${errorText(e)}\n`);
     return 1;

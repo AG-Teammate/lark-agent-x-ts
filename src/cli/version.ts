@@ -2,7 +2,7 @@ import pkg from '../../package.json';
 
 declare const BUILD_COMMIT: string | undefined;
 
-/** 构建时由 `--define BUILD_COMMIT=...` 写入；从源码运行时现场读 git，读不到为 unknown。 */
+/** Injected at build time via `--define BUILD_COMMIT=...`; when running from source, read from git on the fly, or unknown if unavailable. */
 function commit(): string {
   if (typeof BUILD_COMMIT === 'string' && BUILD_COMMIT) return BUILD_COMMIT;
   const r = Bun.spawnSync(['git', '-C', import.meta.dir, 'rev-parse', 'HEAD'], {
@@ -12,5 +12,5 @@ function commit(): string {
   return r.exitCode === 0 ? r.stdout.toString().trim() : 'unknown';
 }
 
-/** `lark --version` 的输出：调用方（如 niuma doctor）据 `commit=` 核对版本。 */
+/** Output of `lark --version`: callers (e.g. niuma doctor) check the version via `commit=`. */
 export const versionLine = (): string => `${pkg.name} ${pkg.version} commit=${commit()}`;

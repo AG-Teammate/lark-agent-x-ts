@@ -15,11 +15,12 @@ import {
 import { ASSETS_DIR, OUT_DIR, PROTO_SRC } from './common.js';
 
 /**
- * 第 6 步：编译协议资产到 assets/（用 buf，语义同 protoc）：
- * - proto.binpb    proto/proto.proto（手写的核心协议）
- * - lark_all.binpb out/lark_all.proto（全量网关定义）
- * - core.binpb     从全量定义裁出 CORE_REQUESTS 及其响应、CORE_TYPES 的传递闭包，常驻进程只加载它
- * 去掉 json_name（运行时按字段名推导，与原版资产逐字节一致）。
+ * Step 6: compile the protocol assets into assets/ (with buf, same semantics as protoc):
+ * - proto.binpb    proto/proto.proto (hand-written core protocol)
+ * - lark_all.binpb out/lark_all.proto (full gateway definitions)
+ * - core.binpb     transitive closure of CORE_REQUESTS (plus responses) and CORE_TYPES cut from the full
+ *                  definitions; long-running processes load only this
+ * json_name is stripped (derived from field names at runtime; byte-identical to the original assets).
  */
 const CORE_REQUESTS = [
   'chats.DeleteChatChatterRequest',
@@ -66,7 +67,7 @@ const CORE_TYPES = [
   'entities.RichTextElement.AnchorProperty',
   'entities.RichTextElement.MarkdownProperty',
   'reactions.PushReactions',
-  // 定时消息把发送包按全量定义的 PutMessageRequest 装进 putRequest
+  // Scheduled messages embed the send packet in putRequest as the full-definition PutMessageRequest
   'messages.PutMessageRequest',
 ];
 
@@ -112,7 +113,7 @@ async function writeSet(name: string, file: FileDescriptorProto): Promise<void> 
   console.log(`${name}.binpb ${data.length} bytes`);
 }
 
-/** 全名（带前导点）→ 类型描述。 */
+/** Full name (with leading dot) → type descriptor. */
 function index(file: FileDescriptorProto): Map<string, DescriptorProto | EnumDescriptorProto> {
   const found = new Map<string, DescriptorProto | EnumDescriptorProto>();
   const walk = (prefix: string, messages: DescriptorProto[], enums: EnumDescriptorProto[]) => {
@@ -142,7 +143,7 @@ function closure(file: FileDescriptorProto, seeds: string[]): Set<string> {
   return need;
 }
 
-/** 保留需要的类型；只作为命名空间的外层 message 去掉字段，只留路径。 */
+/** Keep the needed types; outer messages that only serve as namespaces lose their fields and keep just the path. */
 function trim(file: FileDescriptorProto, need: Set<string>): FileDescriptorProto {
   const keep = (prefix: string, messages: DescriptorProto[], enums: EnumDescriptorProto[]) => {
     const outEnums = enums.filter((e) => need.has(`${prefix}.${e.name}`));
@@ -168,7 +169,7 @@ function trim(file: FileDescriptorProto, need: Set<string>): FileDescriptorProto
     name: 'core.proto',
     package: file.package,
     syntax: file.syntax,
-    // 原版以 CopyFrom 复制（空的）options，字段会显式出现
+    // The original copies the (empty) options via CopyFrom, so the field appears explicitly
     options: file.options ?? create(FileOptionsSchema),
     messageType: top.messages,
     enumType: top.enums,
@@ -178,7 +179,7 @@ function trim(file: FileDescriptorProto, need: Set<string>): FileDescriptorProto
 const cmdMap = (await Bun.file(join(ASSETS_DIR, 'cmd_map.json')).json()) as {
   by_req: Record<string, { resp: string }>;
 };
-// 没有全量 .proto（只改了 proto/proto.proto 或 CORE_REQUESTS，没重跑前几步）时沿用现有的 lark_all.binpb，只重建 proto 与 core
+// Without the full .proto (only proto/proto.proto or CORE_REQUESTS changed, earlier steps not rerun), reuse the existing lark_all.binpb and rebuild only proto and core
 const larkAllSrc = join(OUT_DIR, 'lark_all.proto');
 const fromSource = existsSync(larkAllSrc);
 const larkAll = fromSource

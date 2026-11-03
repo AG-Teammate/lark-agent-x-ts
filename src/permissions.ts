@@ -1,11 +1,11 @@
 /**
- * 权限：按分组或单项（命令，读写混用的命令细到 `命令.动作`）允许 / 拒绝执行；命令行与库共用同一份目录和规则。
+ * Permissions: allow / deny execution per group or per item (a command, or `command.action` for commands that mix reads and writes); the CLI and the library share one catalog and rule set.
  *
- * 规则是 allow / deny 两个名字列表，名字可以是 `*`、分组、命令或 `命令.动作`。判定时从具体到宽泛逐级找
- * （`命令.动作` → 命令 → 分组 → `*`），第一级命中的规则生效，同一级上 deny 优先；都没命中则允许。
- * 全局规则来自 `LARKX_ALLOW` / `LARKX_DENY`；账号在凭证旁边的 `permissions.json` 里有自己的规则时整体替代全局规则。
+ * Rules are two name lists, allow / deny; a name can be `*`, a group, a command, or `command.action`. Evaluation goes level by level from most specific to broadest
+ * (`command.action` → command → group → `*`); the first level with a matching rule wins, with deny taking precedence within a level; if nothing matches, allow.
+ * Global rules come from `LARKX_ALLOW` / `LARKX_DENY`; if the account has its own rules in `permissions.json` next to the credentials, they replace the global rules entirely.
  *
- * 这是防误操作的护栏，不是安全边界：能改环境变量或数据目录的调用方都能绕过。
+ * This is a guardrail against mistakes, not a security boundary: any caller that can change env vars or the data directory can bypass it.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 import type { LarkAuth } from './auth.js';
 import { asList } from './config.js';
 
-/** 分组按对外界的影响划分；顺序即 `lark permissions` 的列出顺序。 */
+/** Groups are divided by their effect on the outside world; the order here is the listing order of `lark permissions`. */
 export const GROUPS = {
   local: '只读本机数据(凭证状态、配置、本地消息库),不联网',
   query: '只读飞书数据(消息、会话、成员、已读情况、翻译等),不留下别人看得见的变化',
@@ -26,7 +26,7 @@ export const GROUPS = {
 
 export type Group = keyof typeof GROUPS;
 
-/** 全部权限项与所属分组：命令行的每个命令（或 `命令.动作`）一项，库的方法归到同一批项上。 */
+/** All permission items and their groups: one item per CLI command (or `command.action`); library methods map onto the same items. */
 export const PERMISSIONS = {
   'auth.status': 'local',
   config: 'local',
@@ -98,14 +98,14 @@ export interface Rules {
 
 export interface Verdict {
   allowed: boolean;
-  /** 起作用的规则，如 `deny outbound`；没有规则命中时为空。 */
+  /** The rule that took effect, e.g. `deny outbound`; empty if no rule matched. */
   rule?: string;
 }
 
-/** `命令.动作` 的命令部分；不细分动作的项为空串。 */
+/** The command part of `command.action`; empty string for items without per-action granularity. */
 const commandOf = (p: string) => (p.includes('.') ? p.slice(0, p.indexOf('.')) : '');
 
-/** 按给定的名字从具体到宽泛逐级找，第一级命中的规则生效，同一级 deny 优先；都没命中则允许。 */
+/** Search the given names level by level from most specific to broadest; the first level with a match wins, with deny taking precedence within a level; if nothing matches, allow. */
 export function match(rules: Rules, levels: string[]): Verdict {
   for (const name of levels) {
     if (rules.deny.includes(name)) return { allowed: false, rule: `deny ${name}` };
@@ -117,7 +117,7 @@ export function match(rules: Rules, levels: string[]): Verdict {
 export const decide = (rules: Rules, p: Permission): Verdict =>
   match(rules, [p, commandOf(p), PERMISSIONS[p], '*'].filter(Boolean));
 
-/** 规则里写错的名字会让本该拒绝的操作照常执行，所以不认识的名字一律报错。 */
+/** A misspelled name in the rules would let an operation that should be denied run, so unknown names are always an error. */
 function validate(rules: Rules, where: string): void {
   const known = new Set<string>(['*', ...Object.keys(GROUPS)]);
   for (const p of Object.keys(PERMISSIONS)) known.add(p).add(commandOf(p));
@@ -128,7 +128,7 @@ function validate(rules: Rules, where: string): void {
     );
 }
 
-/** 权限不允许执行；`permission` 是被拒绝的项，`rule` 是起作用的规则。 */
+/** Execution not permitted; `permission` is the denied item and `rule` is the rule that took effect. */
 export class PermissionDenied extends Error {
   readonly group: Group;
 
@@ -143,7 +143,7 @@ export class PermissionDenied extends Error {
   }
 }
 
-/** 跟随账号的规则放在凭证文件旁边：user_id → {allow, deny}。 */
+/** Per-account rules live next to the credentials file: user_id → {allow, deny}. */
 export const permissionsPath = (auth: LarkAuth): string =>
   join(dirname(auth.path), 'permissions.json');
 
@@ -167,13 +167,13 @@ function readAccounts(path: string): AccountRules {
 
 export interface EffectiveRules {
   rules: Rules;
-  /** 规则从哪来，用于报错与展示。 */
+  /** Where the rules come from, for error messages and display. */
   source: string;
-  /** 是否是账号自己的规则（否则是全局规则）。 */
+  /** Whether these are the account's own rules (otherwise the global rules). */
   own: boolean;
 }
 
-/** 账号（凭证里的 user_id）的生效规则；账号没有自己的规则时用全局规则。 */
+/** Effective rules for the account (user_id in the credentials); falls back to the global rules when the account has none of its own. */
 export function loadRules(auth: LarkAuth): EffectiveRules {
   const path = permissionsPath(auth);
   const own = auth.userId ? readAccounts(path)[auth.userId] : undefined;
@@ -191,7 +191,7 @@ export function loadRules(auth: LarkAuth): EffectiveRules {
   return eff;
 }
 
-/** 设置（`rules` 为 null 时清除）账号自己的规则。 */
+/** Set the account's own rules (clears them when `rules` is null). */
 export function saveAccountRules(auth: LarkAuth, rules: Rules | null): void {
   if (!auth.userId) throw new Error('凭证里没有 user_id,跟随账号的规则需要先登录');
   if (rules) validate(rules, '要保存的规则');
@@ -204,12 +204,12 @@ export function saveAccountRules(auth: LarkAuth, rules: Rules | null): void {
 }
 
 /**
- * 规则从哪来：`true` 与命令行相同（账号自己的规则，没有则 `LARKX_ALLOW` / `LARKX_DENY`），每次检查时重新读取，
- * 改了规则不用重启；或直接给一份固定的规则。
+ * Rule source: `true` behaves like the CLI (the account's own rules, else `LARKX_ALLOW` / `LARKX_DENY`), re-read on every check,
+ * so rule changes need no restart; or pass a fixed rule set directly.
  */
 export type PermissionSource = true | Rules;
 
-/** 不允许时抛 PermissionDenied。 */
+/** Throws PermissionDenied when not allowed. */
 export function authorize(auth: LarkAuth, source: PermissionSource, p: Permission): void {
   const eff: Pick<EffectiveRules, 'rules' | 'source'> =
     source === true ? loadRules(auth) : { rules: source, source: '传入的规则' };
@@ -217,7 +217,7 @@ export function authorize(auth: LarkAuth, source: PermissionSource, p: Permissio
   if (!v.allowed) throw new PermissionDenied(p, v.rule as string, eff.source);
 }
 
-/** 启用时先校验一次规则，配置有误时尽早报错。 */
+/** When enabling, validate the rules once so misconfiguration fails early. */
 export function checkSource(auth: LarkAuth, source: PermissionSource): void {
   if (source === true) loadRules(auth);
   else validate(source, '传入的规则');
@@ -226,8 +226,8 @@ export function checkSource(auth: LarkAuth, source: PermissionSource): void {
 const guarding = new AsyncLocalStorage<true>();
 
 /**
- * 给对象的方法加上权限检查：只检查最外层调用，方法内部再调其他方法（如发送时内部调网关）不再检查；
- * 传入的回调（如长连接的 onMessage）在检查范围之外执行，回调里的调用照常检查。
+ * Add permission checks to an object's methods: only the outermost call is checked; methods calling other methods internally (e.g. send calling the gateway) are not re-checked;
+ * callbacks passed in (e.g. the long connection's onMessage) run outside the checked scope, so calls made inside them are checked as usual.
  */
 export function guardMethods<T extends object>(
   target: T,

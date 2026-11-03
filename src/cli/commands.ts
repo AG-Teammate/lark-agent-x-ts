@@ -43,7 +43,7 @@ const err = (s: string) => process.stderr.write(`${s}\n`);
 const s = (v: Parsed[string]) => (v === undefined ? undefined : String(v));
 
 export interface Command extends CommandSpec {
-  /** 对应的权限项（见 src/permissions.ts）；读写混用的命令按参数取 `命令.动作`。 */
+  /** The corresponding permission key (see src/permissions.ts); commands that mix reads and writes pick `command.action` based on their arguments. */
   access: Permission | ((args: Parsed) => Permission);
   run(args: Parsed): Promise<number>;
 }
@@ -59,7 +59,7 @@ async function readLine(prompt: string): Promise<string> {
   }
 }
 
-/** 扫码登录：最多刷新 6 次二维码，每次等 45 秒。 */
+/** QR-code login: refresh the QR code up to 6 times, waiting 45 seconds each. */
 async function qrLogin(auth: LarkAuth, region: Region): Promise<number> {
   mkdirSync(dataDir(), { recursive: true });
   const pngPath = join(dataDir(), 'login_qr.png');
@@ -112,7 +112,7 @@ const auth: Command = {
   async run(a) {
     const action = String(a.action);
     const la = new LarkAuth();
-    // 新登录的区域：--region > 已有凭证的区域 > LARKX_REGION
+    // Region for a new login: --region > region of existing credentials > LARKX_REGION
     const region = a.region ? getRegion(String(a.region)) : la.region;
     if (action === 'status') {
       printJson(la.status());
@@ -215,7 +215,7 @@ const send: Command = {
   },
 };
 
-/** --root / --reply → 发送选项；被引用的消息若在话题里，引用要带上话题根，否则会落回主会话。 */
+/** --root / --reply -> send options; if the quoted message is in a thread, the quote must carry the thread root, otherwise it lands back in the main chat. */
 async function replyTarget(st: Storage, chatId: string, a: Parsed): Promise<SendOptions> {
   const reply = s(a.reply);
   let rootId = s(a.root);
@@ -226,7 +226,7 @@ async function replyTarget(st: Storage, chatId: string, a: Parsed): Promise<Send
   return { rootId, replyTo: reply, cid: s(a.cid) };
 }
 
-/** 发送结果：成功时用服务端 id 落库（监听收到回显时会补全这条而不是再插一条）并打印 msg_id。 */
+/** Send result: on success, store it under the server id (so the listener's echo completes this row instead of inserting another) and print msg_id. */
 async function finishSend(
   st: Storage,
   c: LarkClient,
@@ -270,7 +270,7 @@ async function finishSend(
   return 0;
 }
 
-/** 发送图片或文件：读本地文件，上传后发出。 */
+/** Send an image or file: read the local file, upload it, then send. */
 function mediaCommand(kind: 'image' | 'file'): Command {
   const label = kind === 'image' ? '图片' : '文件';
   return {
@@ -941,8 +941,8 @@ const api: Command = {
 };
 
 /**
- * 拉取结果的输出（history / get / thread 共用）：一行一条，或 --json 时去掉 content_data 的完整字段。
- * names 给出时（--names）发送者显示为名字，--json 多一个 from_name。
+ * Output for pulled messages (shared by history / get / thread): one line per message, or with --json the full fields minus content_data.
+ * When names is given (--names), senders are shown by name, and --json adds a from_name field.
  */
 function printMessages(msgs: LarkMessage[], json: boolean, names?: Map<string, string>): void {
   if (json) {
@@ -962,7 +962,7 @@ function printMessages(msgs: LarkMessage[], json: boolean, names?: Map<string, s
   }
 }
 
-/** --names 时查发送者名字；查不到的照旧显示 id。 */
+/** With --names, look up sender names; ids that can't be resolved are shown as-is. */
 async function senderNames(
   c: LarkClient,
   msgs: LarkMessage[],
@@ -1264,7 +1264,7 @@ const downloadCmd: Command = {
         | undefined;
       if (r?.content_data) found = { ...r, content_data: JSON.parse(r.content_data) as Dict };
       else if (msgId) {
-        // 本地没有（或是 lark send 先落的、没有内容的记录）：向服务端按 id 取
+        // Not stored locally (or only a content-less row written earlier by lark send): fetch it from the server by id
         const c = await LarkClient.create(la);
         found = (await c.getMessages([msgId]))[0];
       }
@@ -1293,7 +1293,7 @@ async function askLoginChoice(): Promise<'qr' | 'cookie' | 'quit'> {
   return c === '1' ? 'qr' : c === '2' ? 'cookie' : 'quit';
 }
 
-/** 凭证有效直接用；失效时在终端里交互重登（扫码或粘贴 cookie），非交互环境直接抛 AuthExpired。 */
+/** Use credentials if valid; if expired, re-login interactively in the terminal (QR scan or pasted cookie); in a non-interactive environment, throw AuthExpired. */
 async function interactiveLogin(): Promise<LarkAuth> {
   const la = new LarkAuth();
   const [ok, msg] = await la.validate(true);
@@ -1324,10 +1324,10 @@ async function interactiveLogin(): Promise<LarkAuth> {
   }
 }
 
-/** 标签里的会话会变，数字人按标签筛选时隔一段时间重新解析。 */
+/** The chats in a label change over time, so when the digital twin filters by label it re-resolves them periodically. */
 const TAG_REFRESH_MS = 5 * 60_000;
 
-/** 按名字或 id 找标签，返回这些标签里的全部会话；找不到的标签记警告。 */
+/** Find labels by name or id and return all chats in them; labels not found are logged as warnings. */
 async function tagChats(c: LarkClient, wanted: string[]): Promise<Set<string>> {
   const groups = await c.feedGroups();
   const chats = new Set<string>();
@@ -1413,7 +1413,7 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
     setInterval(refresh, TAG_REFRESH_MS);
   }
   const names = new Map<string, string | null>();
-  /** 回复（引用或话题回复）所接的那条消息：先查本地库，没有再向服务端取；取不到时不带。 */
+  /** The message a reply (quote or thread reply) refers to: check the local store first, then fetch from the server; omitted if it can't be fetched. */
   const quoted = async (msg: LarkMessage): Promise<QuotedMessage | undefined> => {
     const pid = msg.parent_id;
     if (!pid || pid === '0' || pid === msg.msg_id) return undefined;
@@ -1460,7 +1460,7 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
     }
     const chatName = names.get(chatId) || '';
     const who = `[${chatName || chatId}] ${senderName || msg.from_id}`;
-    // 撤回与编辑以同一条消息重推：撤回的不再交给 agent；编辑过的更新库里的内容，并让 agent 看到新内容
+    // Recalls and edits are re-pushed as the same message: recalled ones are no longer passed to the agent; edited ones update the stored content and let the agent see the new content
     if (msg.recalled) {
       dispatcher?.withdraw(msg.msg_id);
       if (await st.markRecalled(msg.msg_id, chatId)) logger.info(`${who} 撤回了一条消息`);
@@ -1486,7 +1486,7 @@ async function listenOnce(agentEnabled: boolean, la: LarkAuth): Promise<never> {
       await dispatcher.submit(msg, chatName, senderName, la.userId, quote);
     }
   };
-  /** 表情变化：记日志；开了 LARKX_AGENT_REACTIONS 时，别人对我的消息加 / 取消表情交给数字人。 */
+  /** Reaction changes: log them; with LARKX_AGENT_REACTIONS enabled, others adding / removing reactions on my messages are handed to the digital twin. */
   const onReaction = async (ev: ReactionEvent) => {
     if (ev.user_id === la.userId) return;
     const row = await st.findMessages(ev.message_id);

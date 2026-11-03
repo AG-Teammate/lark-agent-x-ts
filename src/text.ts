@@ -1,4 +1,4 @@
-/** 按 Unicode 码点截取前 n 个字符（对应 Python 的 `s[:n]`，不会切断代理对）。 */
+/** Take the first n characters by Unicode code point (equivalent to Python `s[:n]`; never splits a surrogate pair). */
 export function head(s: string, n: number): string {
   let count = 0;
   let end = 0;
@@ -10,9 +10,9 @@ export function head(s: string, n: number): string {
   return s.slice(0, end);
 }
 
-/** 码点长度（Python 的 `len(s)`）。 */
+/** Length in code points (Python `len(s)`). */
 export const codeLength = (s: string): number => Array.from(s).length;
 
-/** 超过 n 个字符时截断并加省略号，用于终端里的单行预览。 */
+/** Truncate with an ellipsis when longer than n characters; used for single-line terminal previews. */
 export const preview = (s: string, n: number): string =>
   head(s, n) + (codeLength(s) > n ? '…' : '');

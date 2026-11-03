@@ -4,7 +4,7 @@ import { PyFloat } from '../../src/pyjson.js';
 import { ensureDir, OUT_DIR, splitlines, WORK_DIR } from './common.js';
 import { type JsObject, JsParser, type JsValue, pyStr } from './js-literal.js';
 
-/** 第 4 步：schema 注册表 → 每个命名空间一个 .proto，外加可整体编译的合并版 lark_all.proto。 */
+/** Step 4: schema registry → one .proto per namespace, plus a merged lark_all.proto that compiles as a whole. */
 
 const SCALARS = new Set([
   'string',
@@ -32,7 +32,7 @@ function sanitizeIdent(name: unknown): string {
 
 const obj = (v: JsValue | undefined): JsObject => (v instanceof Map ? v : new Map());
 
-/** 整数值的浮点（如 1.0）按整数输出，与原版一致。 */
+/** Integer-valued floats (e.g. 1.0) are printed as integers, matching the original. */
 function intLike(v: JsValue | undefined): JsValue | undefined {
   return v instanceof PyFloat && Number.isInteger(v.value) ? v.value : v;
 }
@@ -54,7 +54,7 @@ class ProtoGen {
       const head = t.split('.')[0] as string;
       if (localNames.has(head)) return t;
       if (this.allNs.has(head)) {
-        if (this.merged) return t; // 合并文件里经外层 message 作用域解析
+        if (this.merged) return t; // in the merged file, resolved via the outer message scope
         this.imports.add(head);
         return `.${t}`;
       }
@@ -206,7 +206,7 @@ if (allUnresolved.size) {
   for (const [ns, s] of allUnresolved) console.log(`  ${ns}: ${[...s].sort().slice(0, 10)}`);
 }
 
-// 合并成单文件（每个命名空间包成一个 message，避免导入环与枚举值冲突），这是能整体编译的版本
+// Merge into a single file (each namespace wrapped in a message, avoiding import cycles and enum value clashes); this is the version that compiles as a whole
 const merged = [
   'syntax = "proto3";',
   '',
@@ -225,7 +225,7 @@ for (const ns of sortedNs) {
 writeFileSync(join(OUT_DIR, 'lark_all.proto'), merged.join('\n'));
 console.log('written merged lark_all.proto');
 
-// 打断按命名空间拆分的文件之间的导入环（protoc 不允许）；合并版不受影响
+// Break import cycles between the per-namespace files (protoc disallows them); the merged version is unaffected
 const IMPORT = /^import "(.+)\.proto";$/;
 const graph = new Map<string, { path: string; lines: string[]; imps: string[] }>();
 for (const ns of byNs.keys()) {
@@ -287,8 +287,8 @@ for (let cyc = findCycle(); cyc; cyc = findCycle()) {
 if (broken.length)
   console.log('broke import cycles:', broken.map(([x, y]) => `('${x}', '${y}')`).join(', '));
 
-// entities <-> pan 的环：保留 pan → entities，entities.proto 里两处 .pan.VisitInfo 降级为 bytes（字段号不变），
-// 让核心命名空间 entities.proto 能单独编译
+// entities <-> pan cycle: keep pan → entities and downgrade the two .pan.VisitInfo fields in entities.proto to bytes
+// (field numbers unchanged), so the core namespace entities.proto compiles on its own
 const entPath = join(OUT_DIR, 'entities.proto');
 const panPath = join(OUT_DIR, 'pan.proto');
 if (existsSync(entPath) && existsSync(panPath)) {

@@ -3,11 +3,11 @@ import { fileURLToPath } from 'node:url';
 
 export type AssetName = 'proto.binpb' | 'core.binpb' | 'lark_all.binpb' | 'cmd_map.json';
 
-// 源码（src/proto/）与库构建产物（lib/proto/）都在仓库根下两层，同一个相对路径指向根目录的 assets/
+// Both the source (src/proto/) and the library build output (lib/proto/) sit two levels below the repo root, so the same relative path points to the root assets/
 let locate = (name: AssetName): string =>
   fileURLToPath(new URL(`../../assets/${name}`, import.meta.url));
 
-/** 单文件可执行把资产嵌进二进制，启动时用这里换成嵌入后的路径；Node / Bun 直接运行时无需调用。 */
+/** Single-file executables embed assets in the binary and call this at startup to swap in the embedded paths; not needed when running directly under Node / Bun. */
 export function setAssetPaths(paths: Record<AssetName, string>): void {
   locate = (name) => paths[name];
 }

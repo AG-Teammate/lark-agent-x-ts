@@ -1,5 +1,5 @@
 {
-  // 库构建（Node 可用）：只编译 src/index.ts 可达的模块；types 只给 node，误用 Bun 专有 API 会在这里编译失败
+  // Library build (usable from Node): compiles only modules reachable from src/index.ts; types are node-only, so accidental use of Bun-specific APIs fails to compile here
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "NodeNext",

@@ -2,7 +2,7 @@ import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { CDN_BASE, EXTRA_BUNDLES, ensureDir, WORK_DIR } from './common.js';
 
-/** 第 2 步：并发下载全部懒加载 chunk（含基础包）→ work/chunks/；已下载的跳过。 */
+/** Step 2: download all lazy-load chunks (including the base bundles) concurrently → work/chunks/; already-downloaded ones are skipped. */
 const out = ensureDir(join(WORK_DIR, 'chunks'));
 const chunkMap = (await Bun.file(join(WORK_DIR, 'chunk_map.json')).json()) as Record<
   string,

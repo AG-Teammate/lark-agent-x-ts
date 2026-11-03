@@ -1,6 +1,7 @@
-// 库构建产物（lib/）在 Node 下的冒烟测试：`bun run test:node`（先构建 lib/ 再用 node --test 运行）。
-// 文件名不叫 *.test.*，免得被 bun test 收进主测试集。
-// 主测试集跑在 bun test 上；这里只确认协议资产、protobuf 编解码、凭证读写、长连接握手超时在 Node 运行时同样可用。
+// Node smoke test for the library build (lib/): `bun run test:node` (builds lib/ first, then runs node --test).
+// The file is not named *.test.* so bun test does not pick it up into the main suite.
+// The main suite runs on bun test; this only confirms that protocol assets, protobuf encode/decode, credentials
+// read/write and the long-connection handshake timeout also work on the Node runtime.
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';

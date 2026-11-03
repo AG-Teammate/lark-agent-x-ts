@@ -2,7 +2,7 @@
   "name": "lark-agent-x-ts",
   "version": "0.1.0",
   "private": true,
-  "description": "飞书 / Lark 网页版消息通道（迁移自 cv-cat/LarkAgentX）",
+  "description": "Feishu / Lark web-client messaging channel (ported from cv-cat/LarkAgentX)",
   "type": "module",
   "exports": {
     ".": {

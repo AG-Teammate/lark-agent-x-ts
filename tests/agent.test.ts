@@ -174,7 +174,7 @@ describe('撤回与编辑', () => {
       '同事甲',
       'me',
     );
-    // 自己编辑的消息不触发
+    // Messages edited by oneself do not trigger
     await d.revise(msg({ msg_id: 'm9', from_id: 'me', content: 'x' }), '', '', 'me');
     backend.release?.();
     await Bun.sleep(20);

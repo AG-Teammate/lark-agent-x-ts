@@ -5,7 +5,7 @@ import { larkType, protoType } from './registry.js';
 
 type Fields = Record<string, unknown>;
 
-/** 把请求消息包进网关 Packet。 */
+/** Wrap a request message in a gateway Packet. */
 export function wrapPacket(cmd: number, typeName: string, payload: Message, requestId: string) {
   return create(protoType('Packet'), {
     payloadType: 1,
@@ -44,8 +44,8 @@ const bin = (type: string, fields: Fields, lark = false) => {
 };
 
 /**
- * 文本填进 richText：richLinks 时 `[文字](url)` 变成带文字的超链接元素（tag A），其余为文本元素。
- * 实测网页协议的 TEXT 消息接受多个 TEXT/A 元素；加粗、段落、POST 类型都会被服务端拒绝（400）。
+ * Fill text into richText: with richLinks, `[text](url)` becomes a hyperlink element with link text (tag A); everything else becomes a text element.
+ * Verified: the web protocol's TEXT message accepts multiple TEXT/A elements; bold, paragraphs, and the POST type are all rejected by the server (400).
  */
 function fillRichText(text: string, richLinks: boolean): RichTextInit {
   const rt = emptyRichText();
@@ -80,7 +80,7 @@ function fillRichText(text: string, richLinks: boolean): RichTextInit {
   return rt;
 }
 
-/** 结构化富文本的 run：文本（可加粗）、带文字的链接、@某人。 */
+/** A run in structured rich text: text (optionally bold), a link with text, or an @mention. */
 export type RichRun =
   | { text?: string; bold?: boolean }
   | { link: { text?: string; href: string } }
@@ -93,8 +93,8 @@ export type RichBlock =
   | { type: 'blank' };
 
 /**
- * 按结构化 spec 填 richText（POST 用）。实测要点：容器元素（p/ul/li/quote）必须显式带 property 字段（哪怕为空），
- * 否则服务端报 unmarshal failed；不要包 DOCS 根节点；innerText 必填；加粗用 TEXT 元素的 style fontWeight + styles/styleRefs。
+ * Fill richText from a structured spec (for POST). Verified details: container elements (p/ul/li/quote) must explicitly carry a property field (even if empty),
+ * otherwise the server reports unmarshal failed; do not wrap in a DOCS root node; innerText is required; bold uses the TEXT element's style fontWeight + styles/styleRefs.
  */
 function fillRichBlocks(blocks: RichBlock[], innerText: string): RichTextInit {
   const rt = emptyRichText();
@@ -119,7 +119,7 @@ function fillRichBlocks(blocks: RichBlock[], innerText: string): RichTextInit {
     if ('link' in run) {
       const href = String(run.link.href);
       const content = String(run.link.text || run.link.href);
-      // 自定义链接文字：客户端据 isCustom/scene 决定按文字渲染；否则会显示成"来自 xx 的消息链接"预览块
+      // Custom link text: the client uses isCustom/scene to decide to render it as text; otherwise it shows a "来自 xx 的消息链接" ("message link from xx") preview card
       const custom = content !== href ? { isCustom: true, scene: 3 } : {};
       const i = el(
         6,
@@ -172,8 +172,8 @@ function fillRichBlocks(blocks: RichBlock[], innerText: string): RichTextInit {
 }
 
 /**
- * Markdown 富文本：整段放进一个 MARKDOWN 元素（tag 49），由客户端按 Markdown 渲染（同开放平台富文本的 md 标签），
- * 标题、列表、代码块、引用、加粗斜体、链接都能显示；innerText 用原文。
+ * Markdown rich text: the whole body goes into one MARKDOWN element (tag 49), which the client renders as Markdown (like the md tag in Open Platform rich text);
+ * headings, lists, code blocks, quotes, bold/italic, and links all display; innerText is the source text.
  */
 function fillMarkdown(markdown: string): RichTextInit {
   const rt = emptyRichText();
@@ -189,7 +189,7 @@ function fillMarkdown(markdown: string): RichTextInit {
   return rt;
 }
 
-/** Markdown 富文本（POST）消息。 */
+/** Markdown rich text (POST) message. */
 export function buildMarkdownMessagePacket(
   markdown: string,
   t: Target,
@@ -204,13 +204,13 @@ export function buildMarkdownMessagePacket(
   );
 }
 
-/** 可编辑的消息内容：纯文本（links 同 sendMessage）、结构化富文本（text 为纯文本摘要）或 Markdown（原消息须是富文本）。 */
+/** Editable message content: plain text (links as in sendMessage), structured rich text (text is a plain-text summary), or Markdown (the original message must be rich text). */
 export type EditableContent =
   | { text: string; links?: boolean }
   | { blocks: RichBlock[]; text: string }
   | { markdown: string };
 
-/** 编辑消息用的 richText 与消息类型（文本 4、富文本 2）；与发送时的写法一致。 */
+/** richText and message type for editing a message (text 4, rich text 2); built the same way as when sending. */
 export function richTextOf(content: EditableContent): { type: 2 | 4; richText: RichTextInit } {
   if ('markdown' in content) return { type: 2, richText: fillMarkdown(content.markdown) };
   if ('blocks' in content)
@@ -222,15 +222,15 @@ export interface Target {
   chatId: string;
   rootId?: string | undefined;
   replyTo?: string | undefined;
-  /** 会话是否为话题群（话题群拒收 isReplyInThread）。 */
+  /** Whether the chat is a thread group (thread groups reject isReplyInThread). */
   threadChat?: boolean;
-  /** 消息的客户端 id：服务端按它去重，同一个 cid 重发拿到的是同一条消息。不给时随机生成。 */
+  /** Client-side message id: the server dedupes on it, so resending with the same cid returns the same message. Randomly generated if not given. */
   cid?: string | undefined;
 }
 
 /**
- * 回复关系：replyTo 为引用回复（parentId=rootId=被引用消息，不设 isReplyInThread 即普通引用样式）；
- * rootId 为回复进话题，普通群缺 isReplyInThread 会落进主会话，话题群反而拒收它（replyInThread not support chat）。
+ * Reply relationship: replyTo is a quoted reply (parentId=rootId=quoted message; without isReplyInThread it uses the normal quote style);
+ * rootId replies into a thread: in a regular group, omitting isReplyInThread lands it in the main chat, whereas thread groups reject that flag (replyInThread not support chat).
  */
 function replyFields(t: Target): Fields {
   if (t.replyTo && (!t.rootId || t.rootId === t.replyTo))
@@ -266,7 +266,7 @@ export function buildSendMessagePacket(
   return putMessage(4, t, { richText: fillRichText(text, richLinks) }, requestId);
 }
 
-/** 结构化富文本（POST）消息；innerText 是纯文本摘要（通知/搜索用）。 */
+/** Structured rich text (POST) message; innerText is a plain-text summary (for notifications / search). */
 export function buildRichMessagePacket(
   blocks: RichBlock[],
   innerText: string,
@@ -277,22 +277,22 @@ export function buildRichMessagePacket(
 }
 
 /**
- * 富文本（POST）消息：content.text 直接放 HTML 片段，服务端自行解析为富文本元素。
- * 实测只保留 <p> <a href>；<b>/<i> 在客户端显示为"当前版本不支持"，列表/引用被丢弃。结构化的用 buildRichMessagePacket。
+ * Rich text (POST) message: content.text holds an HTML fragment directly, which the server parses into rich text elements.
+ * Verified: only <p> and <a href> survive; <b>/<i> show as "当前版本不支持" ("not supported in this version") in the client, and lists/quotes are dropped. Use buildRichMessagePacket for structured content.
  */
 export function buildPostMessagePacket(html: string, t: Target, requestId: string, title = '') {
   return putMessage(2, t, { ...(title ? { title } : {}), text: html }, requestId);
 }
 
 /**
- * 图片消息：图片先经 uploadImage 上传拿到 key。实测 key 要放在 content.cryptoToken，
- * 服务端据此生成各尺寸并加密；放在 content.imageKey 会被拒（invalid image key）。
+ * Image message: upload the image via uploadImage first to get the key. Verified: the key must go in content.cryptoToken,
+ * from which the server generates the sizes and encrypts; putting it in content.imageKey is rejected (invalid image key).
  */
 export function buildImageMessagePacket(imageKey: string, t: Target, requestId: string) {
   return putMessage(5, t, { cryptoToken: imageKey }, requestId);
 }
 
-/** 文件消息：文件先经 uploadFile 上传到该会话。 */
+/** File message: upload the file to the chat via uploadFile first. */
 export function buildFileMessagePacket(
   file: { key: string; name: string; size: number; mime: string },
   t: Target,
@@ -353,7 +353,7 @@ export function buildGroupInfoPacket(chatId: string, requestId: string) {
   );
 }
 
-/** 响应包的 payload；没有 payload 时为 null。 */
+/** Payload of a response packet; null if there is none. */
 function payloadOf(content: Uint8Array): Uint8Array | null {
   const pkt = toDict(protoType('Packet'), fromBinary(protoType('Packet'), content));
   const payload = pkt.payload as Uint8Array | undefined;
@@ -363,7 +363,7 @@ function payloadOf(content: Uint8Array): Uint8Array | null {
 const decode = (type: string, bytes: Uint8Array): Dict =>
   toDict(protoType(type), fromBinary(protoType(type), bytes));
 
-/** 发送响应里服务端分配的消息 id；拿不到为空串。 */
+/** Message id assigned by the server in the send response; empty string if unavailable. */
 export function decodePutMessageResponse(content: Uint8Array): string {
   const payload = payloadOf(content) ?? new Uint8Array();
   return String((decode('PutMessageResponse', payload).message as Dict | undefined)?.id ?? '');
@@ -402,7 +402,7 @@ const utf8 = (b: Uint8Array): string | null => {
   }
 };
 
-/** 用户显示名：优先当前语言的翻译，其次昵称。 */
+/** User display name: prefer the translation for the current locale, then the nickname. */
 export function decodeUserInfoResponse(content: Uint8Array, locale = 'zh_CN'): string | null {
   const payload = payloadOf(content);
   if (!payload) return null;

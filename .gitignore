@@ -1,15 +1,15 @@
-# 依赖与构建产物
+# Dependencies and build output
 node_modules/
 dist/
 lib/
 *.tsbuildinfo
 coverage/
 
-# 协议资产管线的中间产物
+# Intermediate files from the protocol asset pipeline
 scripts/proto-pipeline/work/
 scripts/proto-pipeline/out/
 
-# 本地数据：LARKX_HOME 指到仓库内时，凭证、登录二维码与消息库不能进版本库
+# Local data: if LARKX_HOME points inside the repo, credentials, the login QR code and the message store must not be committed
 credentials.json
 login_qr.png
 *.db
@@ -17,7 +17,7 @@ login_qr.png
 *.db-shm
 *.db-wal
 
-# 环境变量与本机文件
+# Environment variables and machine-local files
 .env
 .env.*
 *.log

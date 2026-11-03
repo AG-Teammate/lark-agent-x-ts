@@ -3,9 +3,10 @@ import { pyDumps } from '../../src/pyjson.js';
 import { ASSETS_DIR, ensureDir, OUT_DIR, WORK_DIR } from './common.js';
 
 /**
- * 第 5 步：原始 cmd 映射 → out/cmd_table.md（速查表）与 assets/cmd_map.json（`lark api` 用）。
- * 原始格式 A `cmd|请求|响应`，B `cmd||推送||推送名`，C `cmd|请求|响应|1|名称`。
- * cmd_map.json：by_cmd 按 cmd 分组全部行；by_req 以请求类型（推送则以推送类型，并标 push）为键，同名取先出现的。
+ * Step 5: raw cmd map → out/cmd_table.md (quick reference) and assets/cmd_map.json (used by `lark api`).
+ * Raw formats: A `cmd|request|response`, B `cmd||push||push name`, C `cmd|request|response|1|name`.
+ * cmd_map.json: by_cmd groups all rows by cmd; by_req is keyed by request type (push type for pushes, marked push);
+ * on duplicate names the first occurrence wins.
  */
 const raw = (await Bun.file(join(WORK_DIR, 'cmd_map.json')).json()) as Record<string, string>;
 const VALID = /^-?\d+(\|[A-Za-z0-9_.]*)+$/;
@@ -56,7 +57,7 @@ for (const r of rows) {
   if (!byCmd.has(k)) byCmd.set(k, []);
   byCmd.get(k)?.push(r);
 }
-// by_cmd 的键含负数与正数，用 Map 保住按 cmd 排好的顺序（普通对象会把非负整数键提前）
+// by_cmd keys include negative and positive numbers; a Map keeps the cmd-sorted order (plain objects move non-negative integer keys first)
 const cmdMap = new Map<string, unknown>([
   ['by_req', Object.fromEntries(byReq)],
   ['by_cmd', byCmd],

@@ -99,7 +99,7 @@ describe('跨会话搜消息', () => {
 });
 
 describe('按时间范围拉历史', () => {
-  // position 0..99，第 n 条创建于 1000+10n 秒；40..55 是空洞（撤回无痕等）
+  // position 0..99; message n is created at 1000+10n seconds; 40..55 is a gap (e.g. recalled without trace)
   const exists = (p: number) => p >= 0 && p <= 99 && (p < 40 || p > 55);
   const fakeChat = () => {
     const c = newClient();
@@ -133,7 +133,7 @@ describe('按时间范围拉历史', () => {
     expect(await c.positionAt('g1', 1_000_000, 99)).toBe(0);
     expect(await c.positionAt('g1', 1_300_000, 99)).toBe(30);
     expect(await c.positionAt('g1', 1_305_000, 99)).toBe(31);
-    // 边界落在空洞里也行：40..55 都没有消息
+    // Bounds may fall inside the gap: 40..55 has no messages
     expect(await c.positionAt('g1', 1_450_000, 99)).toBe(40);
     expect(await c.positionAt('g1', 9_999_000, 99)).toBe(100);
     expect(calls()).toBeLessThan(60);

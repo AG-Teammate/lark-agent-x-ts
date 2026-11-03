@@ -1,6 +1,6 @@
 /**
- * 子命令参数解析，行为对齐原项目的 argparse：位置参数支持 1 个、可选（?）、一个以上（+）；
- * 选项支持取值、开关、取值范围、整数、必填与短别名；`-h/--help` 打印帮助；出错时打印用法并以 2 退出。
+ * Subcommand argument parsing, matching the original project's argparse behavior: positionals support exactly 1, optional (?), or one or more (+);
+ * options support values, flags, choices, integers, required, and short aliases; `-h/--help` prints help; on error, prints usage and exits with 2.
  */
 export interface Positional {
   name: string;
@@ -31,7 +31,7 @@ export type Parsed = Record<string, string | string[] | number | boolean | undef
 
 export class UsageError extends Error {}
 
-/** 帮助请求：消息为帮助文本，打印后以 0 退出。 */
+/** Help request: the message is the help text; it is printed and the process exits with 0. */
 export class HelpRequested extends Error {}
 
 const optKey = (o: Option) => o.name.replace(/-/g, '_');

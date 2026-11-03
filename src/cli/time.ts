@@ -1,7 +1,7 @@
 /**
- * 命令行里的时间参数 → 毫秒时间戳：
- * 相对时长（`30m`、`2h`、`3d`、`1w`：future 为 false 时指多久之前，为 true 时指多久之后）、
- * 日期或日期时间（`2026-10-01`、`2026-10-01 09:30`，本地时间）、秒或毫秒时间戳（10 位 / 13 位数字）。无法识别时抛错。
+ * Command-line time argument → millisecond timestamp:
+ * a relative duration (`30m`, `2h`, `3d`, `1w`: when future is false, that long ago; when true, that long from now),
+ * a date or date-time (`2026-10-01`, `2026-10-01 09:30`, local time), or a seconds or milliseconds timestamp (10 / 13 digits). Throws if unrecognized.
  */
 export function parseTimeArg(s: string, now = Date.now(), future = false): number {
   const v = s.trim();

@@ -10,9 +10,9 @@ import {
 import { PyFloat } from '../pyjson.js';
 
 /**
- * protobuf 消息 → 普通对象，语义对齐原项目用的 protobuf3-to-dict：
- * 只含设置过的字段（显式 presence 的字段设为 0 也算设置），按字段编号排序，键用 proto 字段名；
- * 枚举为数字，bytes 为 Uint8Array，int64 为 bigint，float/double 包成 PyFloat（序列化时保留 `.0`）。
+ * protobuf message → plain object, with semantics matching protobuf3-to-dict as used by the original project:
+ * only fields that were set (an explicit-presence field set to 0 counts as set), sorted by field number, keyed by proto field name;
+ * enums as numbers, bytes as Uint8Array, int64 as bigint, float/double wrapped in PyFloat (keeps `.0` when serialized).
  */
 export type Dict = Record<string, unknown>;
 
@@ -68,14 +68,14 @@ export function toDict(desc: DescMessage, msg: Message): Dict {
   return out;
 }
 
-/** 对象 → protobuf 消息（对应 json_format.ParseDict(ignore_unknown_fields=True)）：字段名可用 proto 名或 JSON 名。 */
+/** Object → protobuf message (equivalent to json_format.ParseDict(ignore_unknown_fields=True)): field names may be proto names or JSON names. */
 export function fromDict(desc: DescMessage, data: Dict | null | undefined): Message {
   return fromJson(desc, (data ?? {}) as JsonValue, { ignoreUnknownFields: true });
 }
 
 /**
- * 解析 JSON 文本并保住大整数：超出安全整数范围的整数字面量改为字符串（protobuf 的 JSON 解析对整数字段同样接受字符串），
- * 避免 19 位会话/消息 id 在 JSON.parse 时丢精度。
+ * Parse JSON text while preserving large integers: integer literals beyond the safe integer range become strings (protobuf JSON parsing accepts strings for integer fields too),
+ * so 19-digit chat/message ids don't lose precision in JSON.parse.
  */
 export function parseJsonKeepingBigInts(text: string): unknown {
   let out = '';

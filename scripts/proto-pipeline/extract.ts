@@ -3,11 +3,11 @@ import { join } from 'node:path';
 import { pyDumps } from '../../src/pyjson.js';
 import { readText, WORK_DIR } from './common.js';
 
-/** 第 3 步：从全部 chunk 里提取 schema 注册表与 cmd 映射 → work/schemas_all.json、work/cmd_map.json。 */
+/** Step 3: extract the schema registry and cmd map from all chunks → work/schemas_all.json, work/cmd_map.json. */
 const REG = /register\("([a-zA-Z0-9_.]+)","([a-zA-Z0-9_.]+)",\{/g;
 const CMD = /"(-?\d+(?:\|[A-Za-z0-9_.]*)+)"/g;
 
-/** 每个 register(ns, name, {...}) 的对象字面量原文（按括号配对，跳过字符串里的括号）。 */
+/** Raw object-literal source of each register(ns, name, {...}) (matched by bracket pairing, skipping brackets inside strings). */
 function extractRegs(src: string): [string, string, string][] {
   const out: [string, string, string][] = [];
   for (const m of src.matchAll(REG)) {
@@ -57,7 +57,7 @@ console.log('files:', files.length);
 console.log('schemas:', allRegs.size);
 console.log('cmd mappings:', cmdMap.size);
 
-// 与 Python 的 sorted((ns, name)) 一致：先按命名空间、再按名字
+// Same as Python's sorted((ns, name)): by namespace first, then by name
 const sorted = [...allRegs.values()].sort((a, b) =>
   a.ns === b.ns ? (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) : a.ns < b.ns ? -1 : 1,
 );

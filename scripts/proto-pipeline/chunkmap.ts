@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { pyDumps } from '../../src/pyjson.js';
 import { BASE_BUNDLES, CDN_BASE, ensureDir, readText, WORK_DIR } from './common.js';
 
-/** 第 1 步：从基础包里解出 webpack 的懒加载 chunk 映射（chunk id → hash）→ work/chunk_map.json。 */
+/** Step 1: extract webpack's lazy-load chunk map (chunk id → hash) from the base bundle → work/chunk_map.json. */
 const chunkMap = new Map<number, string>();
 const pattern = /\.u=\w+=>"static\/js\/"\+\w+\+"\."\+\{([^{}]+)\}\[\w+\]\+"\.js"/g;
 ensureDir(WORK_DIR);

@@ -36,12 +36,12 @@ export const CHAT_TYPE_NAMES: Record<number, string> = {
   2: 'GROUP',
   3: 'TOPIC_GROUP',
 };
-/** Chat.ChatMode 的 THREAD / THREAD_V2：新建的话题群是 GROUP + 这两种模式，旧版话题群才是 TOPIC_GROUP。 */
+/** THREAD / THREAD_V2 of Chat.ChatMode: newly created thread groups are GROUP + one of these modes; only legacy thread groups are TOPIC_GROUP. */
 const THREAD_CHAT_MODES = [2, 3];
 
 const typeName = (t: number) => MSG_TYPE_NAMES[t] ?? String(t);
 
-/** 一条解码后的消息，字段与原项目的消息 dict 一致（入库、agent、命令输出都用它）。 */
+/** A decoded message, with fields matching the original project's message dict (used for DB storage, the agent, and command output). */
 export interface LarkMessage {
   msg_id: string;
   msg_type: number;
@@ -60,9 +60,9 @@ export interface LarkMessage {
   create_time: number | null;
   content: string;
   content_data: Dict | null;
-  /** 已被撤回（推送里同一条消息以撤回状态重推）；只在为 true 时出现。 */
+  /** Recalled (the push re-sends the same message in recalled state); present only when true. */
   recalled?: true;
-  /** 被编辑过（content 是编辑后的内容）；只在为 true 时出现。 */
+  /** Edited (content is the edited content); present only when true. */
   edited?: true;
 }
 
@@ -84,11 +84,11 @@ export function enumToInt(value: unknown): number {
 
 const num = (v: unknown): number | null =>
   v === undefined || v === null ? null : typeof v === 'bigint' ? Number(v) : (v as number);
-/** dict 值转字符串（Python f-string 的效果）：缺省为空串，浮点按 Python repr。 */
+/** Dict value to string (like a Python f-string): missing becomes an empty string, floats use Python repr. */
 const str = (v: unknown): string =>
   v === undefined || v === null ? '' : v instanceof PyFloat ? floatRepr(v.value) : String(v);
 
-/** 话题群里每条根消息自成一个话题。chatInfo 为 chats.PullChatsByIdsRequest 返回的单个会话。 */
+/** In a thread group, every root message starts its own thread. chatInfo is a single chat returned by chats.PullChatsByIdsRequest. */
 export function isThreadChat(chatInfo: Dict): boolean {
   return (
     THREAD_CHAT_MODES.includes(enumToInt(chatInfo.chatMode ?? 0)) ||
@@ -96,7 +96,7 @@ export function isThreadChat(chatInfo: Dict): boolean {
   );
 }
 
-/** 返回 [scope, anchor]：anchor 是回复时的 --root，也是 agent 的会话边界。 */
+/** Returns [scope, anchor]: anchor is the --root used when replying, and also the agent's chat boundary. */
 export function resolveScope(
   msgId: string,
   msgType: number,
@@ -107,7 +107,7 @@ export function resolveScope(
 ): ['chat' | 'topic', string] {
   if (chatType === 1) return ['chat', ''];
   if (rootId && rootId !== '0') return ['topic', threadId || rootId];
-  // 话题群的根消息本身就开启一个话题（建群等系统提示除外）；普通群每条消息也带 threadId=自身 id，不能据此判断
+  // In a thread group a root message itself opens a thread (except system notices such as group creation); in regular groups every message also carries threadId=its own id, so that can't be used to decide
   if ((threadChat || chatType === 3) && msgType !== 6) return ['topic', msgId || ''];
   return ['chat', ''];
 }
@@ -120,7 +120,7 @@ const TAG_PLACEHOLDERS: Record<number, string> = {
   22: '[文档]',
 };
 
-/** 富文本展平为纯文本：文本类元素取内容，段落后换行，@ 取显示名，其余给占位符。 */
+/** Flatten rich text to plain text: text-like elements give their content, paragraphs end with a newline, @ gives the display name, everything else gets a placeholder. */
 export function extractRichText(richText: Dict | undefined): string {
   let text = '';
   try {
@@ -143,7 +143,7 @@ export function extractRichText(richText: Dict | undefined): string {
       const tag = (v.tag as number | undefined) ?? 1;
       const prop = v.property as Uint8Array | undefined;
       if (!prop?.length) continue;
-      // 49 是 MARKDOWN 元素（机器人与 Markdown 消息常用），属性与 TextProperty 同为 content=1，按原文取
+      // 49 is the MARKDOWN element (common in bot and Markdown messages); like TextProperty its content is field 1, taken verbatim
       if ([1, 3, 7, 8, 9, 17, 49].includes(tag)) {
         try {
           text += str(
@@ -174,7 +174,7 @@ function parse(type: string, bytes: Uint8Array): Dict {
   try {
     msg = fromBinary(desc, bytes);
   } catch {
-    // 与原项目（protobuf upb）的报错文本一致，它会进摘要并入库
+    // Same error text as the original project (protobuf upb); it ends up in the summary and is stored in the DB
     throw new Error(`Error parsing message with type '${type.split('.').at(-1)}'`);
   }
   return toDict(desc, msg);
@@ -183,7 +183,7 @@ function parse(type: string, bytes: Uint8Array): Dict {
 const fmt1 = (ms: unknown) => (Number(ms ?? 0) / 1000).toFixed(1);
 const get = (d: unknown, k: string): unknown => (d as Dict | undefined)?.[k];
 
-/** 消息内容 → [摘要文本, 内容 dict]；与原项目 decode_message_content 的摘要格式逐字一致。 */
+/** Message content → [summary text, content dict]; the summary format matches the original project's decode_message_content character for character. */
 export function decodeMessageContent(
   messageType: number,
   content: Uint8Array = new Uint8Array(),
@@ -328,7 +328,7 @@ export function decodeMessageContent(
   return [`[${typeName(messageType)}类型消息]`, null];
 }
 
-/** 长连接帧 → [Frame dict, Packet dict]。 */
+/** Long-connection frame → [Frame dict, Packet dict]. */
 export function parseWsFrame(raw: Uint8Array): [Dict, Dict] {
   const frame = fromBinary(protoType('Frame'), raw);
   const frameDict = toDict(protoType('Frame'), frame);
@@ -336,7 +336,7 @@ export function parseWsFrame(raw: Uint8Array): [Dict, Dict] {
   return [frameDict, toDict(protoType('Packet'), fromBinary(protoType('Packet'), payload))];
 }
 
-/** 消息是否 @ 了 selfId：服务端给的被 @ 名单（atUserIdList），或富文本里 @所有人。 */
+/** Whether the message @-mentions selfId: the server's mention list (atUserIdList), or @all in rich text. */
 function mentions(v: Dict, data: Dict | null, selfId: string): boolean {
   if (((v.atUserIdList as unknown[] | undefined) ?? []).some((id) => String(id) === selfId))
     return true;
@@ -353,7 +353,7 @@ function mentions(v: Dict, data: Dict | null, selfId: string): boolean {
   return false;
 }
 
-/** 实体消息 dict（推送或拉取结果）→ LarkMessage。 */
+/** Entity message dict (push or pull result) → LarkMessage. */
 export function toLarkMessage(
   v: Dict,
   o: {
@@ -361,7 +361,7 @@ export function toLarkMessage(
     threadChat?: boolean;
     fallbackChatId?: string;
     fallbackPosition?: number;
-    /** 当前账号 id：没有推送给的 atMe 时（拉取的消息），据消息里被 @ 的人算 at_me。 */
+    /** Current account id: when there is no pushed atMe (pulled messages), at_me is computed from the users @-mentioned in the message. */
     selfId?: string;
   },
 ): LarkMessage {
@@ -407,7 +407,7 @@ export function toLarkMessage(
   };
 }
 
-/** 推送帧（cmd=6）里的全部消息。 */
+/** All messages in a push frame (cmd=6). */
 export function decodePushMessages(raw: Uint8Array): LarkMessage[] {
   const [, packet] = parseWsFrame(raw);
   if (!('payload' in packet)) return [];
@@ -419,8 +419,8 @@ export function decodePushMessages(raw: Uint8Array): LarkMessage[] {
 }
 
 /**
- * content_data 的入库格式（messages.db 的 content_data 列）：Python `json.dumps(ensure_ascii=False)` 的写法，
- * 原始字节（内联缩略图等）换成 `<n bytes>` 占位，截断到 2 万个字符；无内容时为空串。
+ * Storage format of content_data (the content_data column in messages.db): written like Python `json.dumps(ensure_ascii=False)`,
+ * with raw bytes (inline thumbnails etc.) replaced by a `<n bytes>` placeholder and truncated to 20,000 characters; empty string when there is no content.
  */
 export function contentDataJson(data: Dict | null | undefined): string {
   if (data === null || data === undefined) return '';
@@ -429,7 +429,7 @@ export function contentDataJson(data: Dict | null | undefined): string {
   return head(pyDumps(data, { fallback }), 20000);
 }
 
-/** 一次表情变化（长连接推送 cmd=27）：谁对哪条消息加了 / 取消了哪个表情，以及该消息上各表情的现有数量。 */
+/** One reaction change (long-connection push cmd=27): who added / removed which reaction on which message, plus the current count of each reaction on that message. */
 export interface ReactionEvent {
   message_id: string;
   reaction_type: string;
@@ -438,7 +438,7 @@ export interface ReactionEvent {
   counts: Record<string, number>;
 }
 
-/** 表情推送（reactions.PushReactions）的 payload → 表情变化；只有带操作人的消息才算一次变化。 */
+/** Reaction push (reactions.PushReactions) payload → reaction change; only messages that carry an operator count as a change. */
 export function decodePushReactions(payload: Uint8Array): ReactionEvent[] {
   const desc = larkType('reactions.PushReactions');
   const d = toDict(desc, fromBinary(desc, payload));

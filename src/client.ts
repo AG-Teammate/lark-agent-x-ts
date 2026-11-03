@@ -51,7 +51,7 @@ const logger = getLogger('larkx.client');
 
 type Packet = Message;
 
-// feed.PullFeedCardsRequest 的枚举取值（FeedType.INBOX、PullType、PullFeedType.INBOX、BusinessType.LARK）与 FeedCard.Type.CHAT
+// Enum values for feed.PullFeedCardsRequest (FeedType.INBOX, PullType, PullFeedType.INBOX, BusinessType.LARK) and FeedCard.Type.CHAT
 const FEED_INBOX = 1;
 const PULL_REFRESH = 1;
 const PULL_LOAD_MORE = 2;
@@ -60,22 +60,22 @@ const BUSINESS_LARK = 1;
 const CARD_CHAT = 1;
 
 export interface SendOptions {
-  /** 回复进话题（根消息 id）。 */
+  /** Reply into a thread (root message id). */
   rootId?: string | undefined;
-  /** 引用某条消息（在话题内引用时同时给 rootId）。 */
+  /** Quote a message (when quoting inside a thread, also pass rootId). */
   replyTo?: string | undefined;
   /**
-   * 消息的客户端 id，用于幂等：服务端按它去重，同一个 cid 重发拿到的是同一条消息。
-   * 不给时随机生成；拿到 SendUnconfirmed 后想补发，用它带回的 cid 再发一次即可，不会发重。
+   * Client-side message id used for idempotency: the server dedupes on it, so resending with the same cid yields the same message.
+   * Randomly generated if omitted; to resend after a SendUnconfirmed, reuse the cid it carries and no duplicate will be sent.
    */
   cid?: string | undefined;
-  /** 网络错误、5xx 或拿不到消息 id 时用同一个 cid 自动重试的次数，默认 2。 */
+  /** Number of automatic retries with the same cid on network errors, 5xx, or a missing message id. Default 2. */
   retries?: number | undefined;
 }
 
 /**
- * sendMessage 的内容：纯文本、结构化富文本（text 为纯文本摘要）、HTML 富文本、Markdown（客户端按 Markdown 渲染）、图片或文件。
- * 图片与文件传原始字节，发送前自动上传；name 是文件名（文件消息里显示它，图片只用来标注格式）。
+ * sendMessage content: plain text, structured rich text (text is a plain-text summary), HTML rich text, Markdown (rendered as Markdown by the client), an image, or a file.
+ * Images and files are passed as raw bytes and uploaded automatically before sending; name is the file name (shown in file messages; for images it only indicates the format).
  */
 export type MessageContent =
   | { text: string; links?: boolean }
@@ -85,7 +85,7 @@ export type MessageContent =
   | { image: Uint8Array; name?: string }
   | { file: Uint8Array; name: string };
 
-/** 服务端已受理发送请求，但拿不到消息 id，无法确认是否发出；用 cid 重发不会发重。 */
+/** The server accepted the send request but returned no message id, so delivery can't be confirmed; resending with the cid won't duplicate. */
 export class SendUnconfirmed extends Error {
   constructor(
     message: string,
@@ -98,46 +98,46 @@ export class SendUnconfirmed extends Error {
 export type MessageHandler = (msg: LarkMessage) => Promise<void>;
 export type ReactionHandler = (event: ReactionEvent) => Promise<void>;
 
-/** 收件箱里的一个会话：feed 卡片的更新时间 + 会话信息。 */
+/** A chat in the inbox: the feed card's update time plus chat info. */
 export interface RecentChat {
   chatId: string;
-  /** 会话最近一次变动的时间（毫秒）。 */
+  /** Time of the chat's most recent change (ms). */
   updatedAt: number;
-  /** 会话信息（与 getChatInfo 同为 entities.Chat）；服务端没带时为 null。 */
+  /** Chat info (entities.Chat, same as getChatInfo); null if the server didn't include it. */
   chat: Dict | null;
 }
 
-/** 有未读的会话：unread 是会话未读数（话题群另计新话题数）。 */
+/** A chat with unread messages: unread is the chat's unread count (thread groups count new threads separately). */
 export interface UnreadChat {
   chatId: string;
   name: string;
-  /** 1 单聊、2 群聊、3 旧版话题群（新版话题群也是 2，看 threadChat）。 */
+  /** 1 = direct chat, 2 = group chat, 3 = legacy thread group (new-style thread groups are also 2; check threadChat). */
   chatType: number;
   threadChat: boolean;
   unread: number;
-  /** 话题群里未读的新话题数。 */
+  /** Number of unread new threads in a thread group. */
   unreadThreads: number;
 }
 
-/** 跨会话搜消息的条件；时间为毫秒时间戳。 */
+/** Cross-chat message search criteria; times are millisecond timestamps. */
 export interface MessageSearchOptions {
-  /** 只搜这些会话。 */
+  /** Search only these chats. */
   chatIds?: string[] | undefined;
-  /** 只搜这些人发的。 */
+  /** Only messages sent by these users. */
   fromIds?: string[] | undefined;
   since?: number | undefined;
   until?: number | undefined;
-  /** 最多返回多少条，默认 20。 */
+  /** Maximum number of results, default 20. */
   limit?: number | undefined;
 }
 
-/** 一条搜索命中：summary 是服务端给的摘要（"发送者: 内容…"，去掉了高亮标记），chatTitle 是会话名。 */
+/** A search hit: summary is the server-provided snippet ("发送者: 内容…", i.e. "sender: content…", with highlight markup stripped); chatTitle is the chat name. */
 export interface MessageHit {
   msgId: string;
   chatId: string;
   chatTitle: string;
   fromId: string;
-  /** 秒级时间戳。 */
+  /** Timestamp in seconds. */
   createTime: number;
   position: number | null;
   msgType: number;
@@ -148,38 +148,38 @@ export interface MessageHit {
 const SEARCH_ENTITY_MESSAGE = 5;
 const unhighlight = (s: unknown) => String(s ?? '').replace(/<\/?h>/g, '');
 
-/** 一条消息的已读情况（发送方视角）：谁读了、谁还没读。 */
+/** Read status of a message (from the sender's perspective): who has read it and who hasn't. */
 export interface ReadState {
   messageId: string;
   readCount: number;
   unreadCount: number;
   readUserIds: string[];
   unreadUserIds: string[];
-  /** 最近一个读的人与时间（秒）。 */
+  /** The most recent reader and when they read it (seconds). */
   lastRead: { userId: string; time: number } | null;
 }
 
-/** 一个标记（客户端"标记"列表里的一项）：被标记的消息或会话；消息标记带上消息本身。 */
+/** A flag (one entry in the client's "Flagged" list): a flagged message or chat; message flags include the message itself. */
 export interface FlagItem {
   type: 'message' | 'chat';
   id: string;
-  /** 标记时间（毫秒）。 */
+  /** Time flagged (ms). */
   createTime: number;
   message: LarkMessage | null;
 }
 
-/** 会话里被 Pin 的一条消息。 */
+/** A pinned message in a chat. */
 export interface PinnedMessage {
   pinId: string;
   messageId: string;
-  /** Pin 的人。 */
+  /** Who pinned it. */
   pinnedBy: string;
-  /** Pin 的时间（毫秒）。 */
+  /** Time pinned (ms). */
   pinnedAt: number;
   message: LarkMessage | null;
 }
 
-/** 一条还没发出的定时消息。at 为计划发送时间（毫秒）。 */
+/** A scheduled message not yet sent. at is the planned send time (ms). */
 export interface ScheduledMessage {
   messageId: string;
   at: number;
@@ -194,14 +194,14 @@ const SCHEDULE_CHAT_ONLY = 1;
 const SCHEDULE_PATCH_UPDATE = 1;
 const SCHEDULE_PATCH_DELETE = 3;
 
-/** 会话列表里的一个标签（分组）。keyword 是按关键词自动归类的标签。 */
+/** A label (group) in the chat list. keyword marks labels that auto-sort chats by keyword. */
 export interface FeedGroup {
   id: string;
   name: string;
   type: 'normal' | 'keyword' | 'unknown';
 }
 
-/** 一页最多取多少个标签 / 标签项（服务端对过大的 count 报 invalid request）。 */
+/** Max labels / label items per page (the server rejects an overly large count with invalid request). */
 const FEED_GROUP_PAGE = 20;
 
 // translate.ContentType.TEXT
@@ -210,17 +210,17 @@ const TRANSLATE_TEXT = 2;
 // feed.Shortcut.Type.CHAT
 const SHORTCUT_CHAT = 1;
 
-// feed.FlagItem.FlagType 与 FeedCard.Type.CHAT
+// feed.FlagItem.FlagType and FeedCard.Type.CHAT
 const FLAG_FEED = 1;
 const FLAG_MESSAGE = 2;
 
-/** 一条消息上的表情回复。 */
+/** An emoji reaction on a message. */
 export interface MessageReactions {
   messageId: string;
   reactions: { type: string; count: number; userIds: string[] }[];
 }
 
-/** 群成员（或按 id 查到的用户）。name 已按备注名 > 当前语言显示名 > 默认名取好。 */
+/** A group member (or a user looked up by id). name is already resolved as alias > display name in current locale > default name. */
 export interface ChatMember {
   id: string;
   name: string;
@@ -229,7 +229,7 @@ export interface ChatMember {
 
 const CHATTER_TYPES: Record<number, ChatMember['type']> = { 1: 'user', 2: 'bot', 3: 'ai' };
 
-/** entities.Chatter → 显示名：自己设的备注名优先，其次当前语言的显示名，再次默认显示名与 name。 */
+/** entities.Chatter -> display name: the user's own alias first, then the display name in the current locale, then the default display name and name. */
 export function chatterName(v: Dict, locale = 'zh_CN'): string {
   const display = (v.displayName ?? {}) as {
     defaultVal?: string;
@@ -251,30 +251,30 @@ const toMember = (id: string, v: Dict, locale: string): ChatMember => ({
   type: CHATTER_TYPES[enumToInt(v.type ?? 0)] ?? 'unknown',
 });
 
-/** 补收断线期间的消息时，本地已有记录的查询方式（都可省略，省略时按本地什么都没有处理）。 */
+/** Local state to consult when backfilling messages missed during a disconnect (all optional; omitted means nothing is stored locally). */
 export interface MissedOptions {
-  /** 本地已有的该会话最大 position，没有记录时为 -1（会话 position 从 0 起）；只从它之后拉，减少重复。 */
+  /** Highest position stored locally for this chat, or -1 if none (chat positions start at 0); only messages after it are pulled, reducing duplicates. */
   localPosition?: (chatId: string) => Promise<number>;
-  /** 本地见过的该会话话题 id：普通群的话题回复不占会话 position，只能按话题去查。 */
+  /** Thread ids seen locally for this chat: thread replies in regular groups don't take a chat position, so they can only be looked up per thread. */
   knownThreads?: (chatId: string) => Promise<string[]>;
-  /** 每个会话（或话题）最多往回看多少条，默认 200。 */
+  /** How many messages to look back per chat (or thread), default 200. */
   maxPerChat?: number;
 }
 
 const CHANNEL_CHAT = 1;
-// Chat.ChatMode.THREAD_V2（新版话题群）；PatchGroupChatRequest.UpdateFields 的 NAME、DESCRIPTION
+// Chat.ChatMode.THREAD_V2 (new-style thread group); NAME and DESCRIPTION of PatchGroupChatRequest.UpdateFields
 const CHAT_MODE_THREAD_V2 = 3;
 const GROUP_FIELD_NAME = 1;
 const GROUP_FIELD_DESCRIPTION = 3;
-/** 长连接推送：表情变化（reactions.PushReactions）。 */
+/** Websocket push: reaction changes (reactions.PushReactions). */
 const PUSH_REACTIONS = 27;
-/** 话题群一次往回看的话题数。 */
+/** Number of threads to look back at a time in a thread group. */
 const RECENT_THREADS = 20;
 
 const int = (v: unknown, dflt = -1): number =>
   v === undefined || v === null ? dflt : Number(v as number | bigint);
 
-/** 网关出错时响应体仍是 Packet，错误文本放在 sid 字段里；解不出来时为空串。 */
+/** On gateway errors the response body is still a Packet with the error text in the sid field; empty string if it can't be decoded. */
 async function gatewayReason(res: Response): Promise<string> {
   try {
     const pkt = fromBinary(protoType('Packet'), new Uint8Array(await res.arrayBuffer()));
@@ -286,20 +286,20 @@ async function gatewayReason(res: Response): Promise<string> {
 
 export interface ClientOptions {
   /**
-   * 权限检查：`true` 按与命令行相同的规则（账号自己的规则，没有则 `LARKX_ALLOW` / `LARKX_DENY`），或给一份固定规则；
-   * 不允许时方法抛 PermissionDenied。不传时不检查，全部允许。
+   * Permission check: `true` uses the same rules as the CLI (the account's own rules, else `LARKX_ALLOW` / `LARKX_DENY`), or pass a fixed rule set;
+   * disallowed methods throw PermissionDenied. If omitted, nothing is checked and everything is allowed.
    */
   permissions?: PermissionSource;
 }
 
-/** 网页协议客户端：网关请求（HTTP + protobuf）与消息长连接。 */
+/** Web-protocol client: gateway requests (HTTP + protobuf) and the message long connection. */
 export class LarkClient {
   private readonly threadChats = new Map<string, boolean>();
   private readonly chatterNames = new Map<string, string>();
 
   private constructor(readonly auth: LarkAuth) {}
 
-  /** 校验凭证（失效时抛 AuthExpired），缺 app_key / user_id 时补抓并保存。 */
+  /** Validate credentials (throws AuthExpired if invalid); fetch and save app_key / user_id if missing. */
   static async create(auth: LarkAuth, o: ClientOptions = {}): Promise<LarkClient> {
     await auth.requireValid();
     if (!auth.appKey || !auth.userId) {
@@ -357,17 +357,17 @@ export class LarkClient {
   }
 
   /**
-   * 长连接计时：握手超时、心跳间隔、多久收不到任何帧视为断线。
-   * 服务端对每次心跳都回一帧（cmd=200），所以两个心跳周期都没收到东西就是连接已死。
+   * Websocket timings: handshake timeout, heartbeat interval, and how long without any frame counts as disconnected.
+   * The server answers every heartbeat with a frame (cmd=200), so two heartbeat periods with nothing received means the connection is dead.
    */
   wsTiming = { openTimeoutMs: 15_000, heartbeatMs: 30_000, idleTimeoutMs: 65_000 };
 
   /**
-   * 连上消息长连接并持续接收，直到连接关闭（正常关闭或 signal 中止时返回，异常时抛错）。
-   * 每个带 sid 的帧都回 ACK，按 wsTiming 发应用层心跳；推送（cmd=6）里的消息按到达顺序串行交给 onMessage。
-   * 握手超时、心跳无回应都按异常断开处理，由调用方重连。
-   * onOpen 在连上后调用一次：此后的消息都会推送过来，适合在这里补拉断线期间的消息。
-   * onReaction 收表情变化（推送 cmd=27，谁对哪条消息加了 / 取消了哪个表情），与消息走同一条串行队列。
+   * Connect to the message long connection and keep receiving until it closes (returns on normal close or signal abort, throws on error).
+   * Every frame with a sid is ACKed, application-level heartbeats are sent per wsTiming, and messages in pushes (cmd=6) are handed to onMessage serially in arrival order.
+   * Handshake timeout and unanswered heartbeats are treated as abnormal disconnects; the caller reconnects.
+   * onOpen is called once after connecting: all later messages will be pushed, so this is the place to backfill messages missed while disconnected.
+   * onReaction receives reaction changes (push cmd=27: who added / removed which reaction on which message), on the same serial queue as messages.
    */
   async connectWebsocket(
     onMessage: MessageHandler,
@@ -384,7 +384,7 @@ export class LarkClient {
       let heartbeat: ReturnType<typeof setInterval> | undefined;
       let lastFrameAt = Date.now();
       let settled = false;
-      // Node 的 WebSocket 握手失败时可能既不触发 error 也不触发 close，收尾不能只靠 close 事件
+      // Node's WebSocket may fire neither error nor close when the handshake fails, so cleanup can't rely on the close event alone
       const finish = (err?: Error) => {
         if (settled) return;
         settled = true;
@@ -452,7 +452,7 @@ export class LarkClient {
         }
       });
       ws.addEventListener('error', () => {
-        // 具体原因在随后的 close 事件里
+        // The actual reason arrives in the subsequent close event
       });
       ws.addEventListener('close', (ev) => {
         if (ev.code === 1000 || signal?.aborted) finish();
@@ -462,7 +462,7 @@ export class LarkClient {
     await chain;
   }
 
-  /** 推送与按 id 拉取的结果里没有会话模式，话题群的根消息要查过 chatMode 才能归到它自己的话题。 */
+  /** Pushes and fetch-by-id results don't carry the chat mode; a thread group's root message must check chatMode before it can be assigned to its own thread. */
   private async fixThreadScope(msg: LarkMessage): Promise<LarkMessage> {
     if (msg.scope === 'chat' && msg.chat_type === 2 && (await this.isThreadChat(msg.chat_id)))
       [msg.scope, msg.anchor] = resolveScope(msg.msg_id, msg.msg_type, 2, '', '', true);
@@ -513,19 +513,19 @@ export class LarkClient {
     };
   }
 
-  /** 发送重试的间隔（毫秒），第 n 次重试等 n 倍。 */
+  /** Delay between send retries (ms); the nth retry waits n times this. */
   sendRetryDelayMs = 1000;
 
   /**
-   * 发送一条消息并确认送达，返回服务端分配的消息 id；失败时抛错而不是返回 null：
-   * 网络错误、5xx、拿不到消息 id 时按 o.retries 用同一个 cid 重试（服务端去重，不会发重）；仍失败时抛 NetworkError / HttpError，
-   * 或 SendUnconfirmed（服务端已受理但拿不到消息 id，可能已发出；带着 cid，之后用它重发即可）。
-   * 内容见 MessageContent：纯文本（links 时把 `[文字](url)` 渲染成带文字的超链接）、结构化富文本（text 是纯文本摘要）、HTML 富文本、图片、文件；
-   * 图片与文件先上传再发送，上传失败同样抛 NetworkError / HttpError。
+   * Send a message and confirm delivery, returning the server-assigned message id; throws on failure instead of returning null:
+   * on network errors, 5xx, or a missing message id it retries o.retries times with the same cid (server dedupes, so no duplicates); if still failing it throws NetworkError / HttpError,
+   * or SendUnconfirmed (server accepted it but returned no message id, so it may have been sent; carries the cid for a later resend).
+   * Content is a MessageContent: plain text (with links, `[text](url)` renders as a hyperlink with text), structured rich text (text is a plain-text summary), HTML rich text, image, file;
+   * images and files are uploaded first, and upload failures likewise throw NetworkError / HttpError.
    */
   async sendMessage(chatId: string, content: MessageContent, o: SendOptions = {}): Promise<string> {
     const { pkt, cid } = await this.messagePacket(chatId, content, o);
-    // 服务端按消息 cid 去重，重试同一个包不会发重
+    // The server dedupes on the message cid, so retrying the same packet won't send duplicates
     const retries = o.retries ?? 2;
     for (let attempt = 0; ; attempt++) {
       try {
@@ -542,7 +542,7 @@ export class LarkClient {
     }
   }
 
-  /** 发送包（PutMessageRequest，cmd 5）与消息 cid；图片、文件在这里先上传。 */
+  /** Build the send packet (PutMessageRequest, cmd 5) and message cid; images and files are uploaded here first. */
   private async messagePacket(
     chatId: string,
     content: MessageContent,
@@ -574,8 +574,8 @@ export class LarkClient {
   }
 
   /**
-   * 定时发送：到 at（毫秒）时由服务端发出，返回定时消息 id（发出后就是这条消息的 id）。内容与回复选项同 sendMessage。
-   * 话题里的回复（o.rootId）挂在该话题下。
+   * Scheduled send: the server sends it at `at` (ms); returns the scheduled message id (which becomes the message's id once sent). Content and reply options as in sendMessage.
+   * A reply in a thread (o.rootId) is attached to that thread.
    */
   async scheduleMessage(
     chatId: string,
@@ -599,7 +599,7 @@ export class LarkClient {
     return String(id);
   }
 
-  /** 会话里还没发出的定时消息（等待中、已暂停），按发送时间升序。 */
+  /** Scheduled messages in a chat not yet sent (pending or paused), ascending by send time. */
   async scheduledMessages(chatId: string): Promise<ScheduledMessage[]> {
     const resp = await this.api('messages.PullChatScheduleMessagesRequest', {
       chatId,
@@ -620,7 +620,7 @@ export class LarkClient {
       .sort((a, b) => a.at - b.at);
   }
 
-  /** 改定时消息的发送时间（毫秒）。 */
+  /** Change a scheduled message's send time (ms). */
   async rescheduleMessage(chatId: string, messageId: string, at: number): Promise<void> {
     await this.api('messages.PatchScheduleMessageRequest', {
       patchType: SCHEDULE_PATCH_UPDATE,
@@ -630,7 +630,7 @@ export class LarkClient {
     });
   }
 
-  /** 取消定时消息（不再发出）。 */
+  /** Cancel a scheduled message (it will not be sent). */
   async cancelScheduledMessage(chatId: string, messageId: string): Promise<void> {
     await this.api('messages.PatchScheduleMessageRequest', {
       patchType: SCHEDULE_PATCH_DELETE,
@@ -655,7 +655,7 @@ export class LarkClient {
     return msgId;
   }
 
-  /** 发文本消息，返回消息 id；未能确认发送成功时记错误日志并返回 null。richLinks 同 sendMessage 的 links。 */
+  /** Send a text message, returning the message id; if sending can't be confirmed, logs an error and returns null. richLinks is the same as sendMessage's links. */
   async sendMsg(
     text: string,
     chatId: string,
@@ -671,7 +671,7 @@ export class LarkClient {
     }
   }
 
-  /** 结构化富文本（POST）消息；innerText 是纯文本摘要。返回消息 id，失败 null。 */
+  /** Structured rich text (POST) message; innerText is the plain-text summary. Returns the message id, or null on failure. */
   async sendRich(
     blocks: RichBlock[],
     innerText: string,
@@ -686,7 +686,7 @@ export class LarkClient {
     }
   }
 
-  /** HTML 片段的富文本（POST）消息。返回消息 id，失败 null。 */
+  /** Rich text (POST) message from an HTML fragment. Returns the message id, or null on failure. */
   async sendPost(
     html: string,
     chatId: string,
@@ -707,8 +707,8 @@ export class LarkClient {
   }
 
   /**
-   * 跨会话搜消息（同客户端搜索框的"消息"），按服务端的相关度排序；可按会话、发送人、时间过滤。
-   * 服务端的搜索有索引延迟，刚发出的消息可能要过一会儿才搜得到。
+   * Search messages across chats (same as the "Messages" tab of the client's search box), ranked by server relevance; filterable by chat, sender, and time.
+   * Server search has indexing lag; a just-sent message may take a while to become searchable.
    */
   async searchMessages(query: string, o: MessageSearchOptions = {}): Promise<MessageHit[]> {
     const limit = o.limit ?? 20;
@@ -770,8 +770,8 @@ export class LarkClient {
   }
 
   /**
-   * 官方"消息链接"（客户端"复制消息链接"同款 applink）：单条点开定位到该消息；
-   * 多条则是一个合并链接，客户端以"来自群聊"的消息预览展示多条。话题内消息同样以会话为来源。
+   * Official "message link" (the same applink as the client's "Copy message link"): a single message opens and jumps to that message;
+   * multiple messages produce one combined link, which the client previews as a multi-message card "from group chat". Messages in threads also use the chat as their source.
    */
   async messageLink(chatId: string, messageIds: string[]): Promise<string | null> {
     const resp = await this.api('messages.PutMessageLinkRequest', {
@@ -782,7 +782,7 @@ export class LarkClient {
     return (resp.tokenUrl as string | undefined) || null;
   }
 
-  /** 当前账号与自己的会话（Lark 允许给自己发消息）；不存在时服务端会创建。 */
+  /** The current account's chat with itself (Lark allows messaging yourself); the server creates it if it doesn't exist. */
   selfChat(): Promise<string | null> {
     return this.createChat(this.auth.userId);
   }
@@ -807,7 +807,7 @@ export class LarkClient {
   }
 
   /**
-   * 批量查用户（或机器人）的显示名，返回 id → 名字；查不到的 id 不在结果里。结果在进程内缓存，同一 id 只查一次。
+   * Batch-look up display names of users (or bots), returning id -> name; ids not found are omitted. Results are cached in-process, so each id is looked up only once.
    */
   async userNames(ids: string[]): Promise<Map<string, string>> {
     const want = [...new Set(ids.filter(Boolean))];
@@ -827,7 +827,7 @@ export class LarkClient {
     return out;
   }
 
-  /** 会话成员（含机器人），最多取 max 个；翻页参数（cursor / offset / orderCursor）原样带回，直到服务端不再给。 */
+  /** Chat members (including bots), up to max; paging params (cursor / offset / orderCursor) are passed back verbatim until the server stops returning them. */
   async chatMembers(chatId: string, max = 5000): Promise<ChatMember[]> {
     const members = new Map<string, ChatMember>();
     let page: Dict = {};
@@ -851,8 +851,8 @@ export class LarkClient {
   }
 
   /**
-   * 建群并拉人（memberIds 可为空，即只有自己），返回新群的 chat_id。topic 为 true 时建话题群。
-   * 群对成员可见、会通知被拉的人；同一个 cid 重发不会建出两个群。
+   * Create a group and add members (memberIds may be empty, i.e. just yourself), returning the new group's chat_id. topic = true creates a thread group.
+   * The group is visible to members and notifies those added; resending with the same cid won't create two groups.
    */
   async createGroup(
     name: string,
@@ -872,17 +872,17 @@ export class LarkClient {
     return id;
   }
 
-  /** 把人拉进群（需要有拉人权限）。 */
+  /** Add users to a group (requires permission to add members). */
   async addMembers(chatId: string, userIds: string[]): Promise<void> {
     await this.api('chats.PutChatChatterRequest', { chatId, chatterIds: userIds });
   }
 
-  /** 把人移出群（需要是群主或管理员）。 */
+  /** Remove users from a group (requires being the owner or an admin). */
   async removeMembers(chatId: string, userIds: string[]): Promise<void> {
     await this.api('chats.DeleteChatChatterRequest', { chatId, chatterIds: userIds });
   }
 
-  /** 改群名 / 群描述（给了哪个改哪个）。 */
+  /** Change the group name / description (whichever is given). */
   async updateGroup(chatId: string, o: { name?: string; description?: string }): Promise<void> {
     const fields: number[] = [];
     if (o.name !== undefined) fields.push(GROUP_FIELD_NAME);
@@ -896,7 +896,7 @@ export class LarkClient {
     });
   }
 
-  /** Pin 一条消息到会话（会话成员都看得到），返回 pin id。 */
+  /** Pin a message to the chat (visible to all chat members); returns the pin id. */
   async pinMessage(chatId: string, messageId: string): Promise<string> {
     const resp = await this.api('pin.PutPinRequest', { chatId, messageId });
     const id = (resp.pin as Dict | undefined)?.id;
@@ -904,7 +904,7 @@ export class LarkClient {
     return String(id);
   }
 
-  /** 取消 Pin；消息没被 Pin 时返回 false。 */
+  /** Unpin; returns false if the message wasn't pinned. */
   async unpinMessage(chatId: string, messageId: string): Promise<boolean> {
     const resp = await this.api('pin.PullPinsByMessageIDsRequest', { messageIds: [messageId] });
     const pin = Object.values((resp.pins ?? {}) as Record<string, Dict>).find(
@@ -915,7 +915,7 @@ export class LarkClient {
     return true;
   }
 
-  /** 会话里被 Pin 的消息（最多 max 条），带上消息本身，按 Pin 时间从新到旧。 */
+  /** Pinned messages in a chat (up to max), including the messages themselves, newest pin first. */
   async chatPins(chatId: string, max = 100): Promise<PinnedMessage[]> {
     const out: PinnedMessage[] = [];
     let cursor: bigint | undefined;
@@ -946,7 +946,7 @@ export class LarkClient {
     return out.sort((a, b) => b.pinnedAt - a.pinnedAt).slice(0, max);
   }
 
-  /** 我的会话标签（分组），按标签位置排序。 */
+  /** My chat labels (groups), sorted by label position. */
   async feedGroups(): Promise<FeedGroup[]> {
     const groups: Dict[] = [];
     let cursor = '';
@@ -969,7 +969,7 @@ export class LarkClient {
       }));
   }
 
-  /** 某个标签里的会话（chat_id）。 */
+  /** Chats (chat_id) in a given label. */
   async feedGroupChats(groupId: string): Promise<string[]> {
     const out = new Set<string>();
     let cursor = '';
@@ -987,7 +987,7 @@ export class LarkClient {
     return [...out];
   }
 
-  /** 会话列表里置顶的会话（chat_id），按置顶顺序。 */
+  /** Pinned chats (chat_id) in the chat list, in pin order. */
   async shortcuts(): Promise<string[]> {
     const resp = await this.api('feed.PullShortcutsRequest', { position: 0, count: 200 });
     return ((resp.shortcuts ?? []) as Dict[])
@@ -996,33 +996,33 @@ export class LarkClient {
       .map((x) => String(x.id));
   }
 
-  /** 在会话列表里置顶这些会话（排在已置顶的之后）。只影响自己的会话列表。 */
+  /** Pin these chats in the chat list (after those already pinned). Affects only your own chat list. */
   async addShortcuts(chatIds: string[]): Promise<void> {
     await this.api('feed.PutShortcutsRequest', {
       shortcuts: chatIds.map((id, i) => ({ id, type: SHORTCUT_CHAT, position: i })),
     });
   }
 
-  /** 取消置顶。 */
+  /** Unpin. */
   async removeShortcuts(chatIds: string[]): Promise<void> {
     await this.api('feed.DeleteShortcutsRequest', {
       shortcuts: chatIds.map((id) => ({ id, type: SHORTCUT_CHAT })),
     });
   }
 
-  /** 标记 / 取消标记消息（同客户端的"标记"，留给自己稍后处理；只有自己看得到）。 */
+  /** Flag / unflag messages (same as the client's "Flag", a reminder for yourself; only you can see it). */
   async flagMessages(messageIds: string[], remove = false): Promise<void> {
     const items = messageIds.map((id) => ({ itemId: id, flagType: FLAG_MESSAGE }));
     await this.api('feed.UpdateFlagsRequest', remove ? { deletedItems: items } : { items });
   }
 
-  /** 标记 / 取消标记会话。 */
+  /** Flag / unflag chats. */
   async flagChats(chatIds: string[], remove = false): Promise<void> {
     const items = chatIds.map((id) => ({ itemId: id, itemType: CARD_CHAT, flagType: FLAG_FEED }));
     await this.api('feed.UpdateFlagsRequest', remove ? { deletedItems: items } : { items });
   }
 
-  /** 我的标记列表（最多 max 个），按标记时间从新到旧。 */
+  /** My flagged list (up to max), newest flag first. */
   async flags(max = 200): Promise<FlagItem[]> {
     const out: FlagItem[] = [];
     let cursor: string | undefined;
@@ -1051,8 +1051,8 @@ export class LarkClient {
   }
 
   /**
-   * 把一条消息转发到这些会话（原样转发，接收方看到"转发自"），返回会话 id → 新消息 id；转发失败的会话不在结果里。
-   * 每个目标带一个消息 cid，服务端据此去重，同一次调用里的重试不会发重。
+   * Forward a message to these chats (forwarded as-is; recipients see "Forwarded from"), returning chat id -> new message id; chats where forwarding failed are omitted.
+   * Each target gets its own message cid, which the server dedupes on, so retries within one call won't send duplicates.
    */
   async forwardMessage(messageId: string, chatIds: string[]): Promise<Map<string, string>> {
     const resp = await this.api('messages.PutTransmitMessageRequest', {
@@ -1067,8 +1067,8 @@ export class LarkClient {
   }
 
   /**
-   * 翻译文本（客户端"翻译"同款），按顺序返回译文。targetLanguage 如 zh、en、ja；sourceLanguage 留空自动识别。
-   * 不改变任何消息的显示状态。
+   * Translate text (same as the client's "Translate"), returning translations in order. targetLanguage e.g. zh, en, ja; leave sourceLanguage empty to auto-detect.
+   * Doesn't change how any message is displayed.
    */
   async translateText(
     texts: string[],
@@ -1088,7 +1088,7 @@ export class LarkClient {
     return out;
   }
 
-  /** 翻译消息（按消息内容的纯文本摘要翻译），返回原文与译文；不存在或没有文字内容的消息跳过。 */
+  /** Translate messages (using the plain-text summary of their content), returning original and translated text; messages that don't exist or have no text are skipped. */
   async translateMessages(
     messageIds: string[],
     targetLanguage: string,
@@ -1105,7 +1105,7 @@ export class LarkClient {
     }));
   }
 
-  /** 撤回一条消息（自己发的；群管理员也可撤回群里别人的）。服务端没有确认时抛错。 */
+  /** Recall a message (your own; group admins can also recall others' messages in the group). Throws if the server doesn't confirm. */
   async recallMessage(msgId: string): Promise<void> {
     const resp = await this.api('messages.DeleteMessageRequest', { id: msgId });
     if (resp.message !== 'ok')
@@ -1113,8 +1113,8 @@ export class LarkClient {
   }
 
   /**
-   * 编辑自己发的文本或富文本消息，内容整条替换；对方看到"已编辑"。
-   * 纯文本消息只能改成纯文本（content 用 text），富文本消息用 blocks 或 markdown；超过可编辑时限等由服务端拒绝（HttpError.reason 说明原因）。
+   * Edit your own text or rich-text message, replacing the whole content; others see "Edited".
+   * Plain-text messages can only be edited to plain text (use text for content); rich-text messages use blocks or markdown. The server rejects edits past the edit window etc. (HttpError.reason explains why).
    */
   async editMessage(msgId: string, content: EditableContent): Promise<void> {
     const { type, richText } = richTextOf(content);
@@ -1126,22 +1126,22 @@ export class LarkClient {
     });
   }
 
-  /** 给消息加表情回复，reactionType 如 THUMBSUP、OK、DONE、SMILE（与客户端表情面板的 key 一致）。 */
+  /** Add a reaction to a message; reactionType e.g. THUMBSUP, OK, DONE, SMILE (matching the keys of the client's emoji panel). */
   async addReaction(msgId: string, reactionType: string): Promise<void> {
     await this.api('reactions.PutReactionRequest', { messageId: msgId, reactionType });
   }
 
-  /** 去掉自己加的某个表情回复。 */
+  /** Remove one of your own reactions. */
   async removeReaction(msgId: string, reactionType: string): Promise<void> {
     await this.api('reactions.DeleteReactionRequest', { messageId: msgId, reactionType });
   }
 
-  /** 消息上的表情回复：每种表情的数量与加过的人。 */
+  /** Reactions on a message: count and reactors for each emoji. */
   async reactions(messageIds: string[]): Promise<MessageReactions[]> {
     const resp = await this.api('reactions.PullReactionsRequest', { messageIds, fetchUsers: true });
     return ((resp.messageReactions ?? []) as Dict[]).map((mr) => ({
       messageId: String(mr.messageId),
-      // 表情被全部去掉后服务端仍会返回一条 count=0 的记录，不算
+      // After a reaction is fully removed the server still returns a count=0 entry; ignore it
       reactions: ((mr.reactions ?? []) as Dict[])
         .filter((r) => Number(r.count ?? 0) > 0)
         .map((r) => ({
@@ -1157,7 +1157,7 @@ export class LarkClient {
     }));
   }
 
-  /** 消息的已读情况（谁读了、谁没读），消息须在 chatId 会话里；查不到的消息不在结果里。 */
+  /** Read status of messages (who has / hasn't read them); messages must be in chat chatId; messages not found are omitted. */
   async readStates(chatId: string, messageIds: string[]): Promise<ReadState[]> {
     const resp = await this.api('messages.PullMessageReadStateRequest', {
       pairs: messageIds.map((messageId) => ({ chatId, messageId })),
@@ -1181,7 +1181,7 @@ export class LarkClient {
       });
   }
 
-  /** 我自己是否读过这些消息：id → 读过的时间（秒），没读过为 null。 */
+  /** Whether I've read these messages myself: id -> time read (seconds), or null if unread. */
   async myReadStates(messageIds: string[]): Promise<Map<string, number | null>> {
     const resp = await this.api('messages.PullMessageMeReadStateRequest', {
       messageIds,
@@ -1195,7 +1195,7 @@ export class LarkClient {
     return out;
   }
 
-  /** 收到消息即标已读（listen 的 LARKX_MARK_READ）；失败只记 debug。 */
+  /** Mark messages read as soon as they arrive (listen's LARKX_MARK_READ); failures are only logged at debug. */
   async markRead(chatId: string, maxPosition: number, messageIds?: string[]): Promise<boolean> {
     try {
       await this.api('messages.PutReadMessagesRequest', {
@@ -1211,10 +1211,10 @@ export class LarkClient {
   }
 
   /**
-   * 把这些消息标为已读，效果同在客户端里看过它们：会话/话题的未读推进到其中最新一条，发送方看到"已读"。
-   * 主会话里的消息按 position 推进会话已读位置；话题回复按 threadPosition 推进该话题，
-   * 请求里的 maxPosition 用话题根消息的 position（服务端要求必填，且只会前进不会回退）。
-   * 消息不存在、不属于该会话或请求失败时抛错。返回标记的消息数。
+   * Mark these messages as read, same as viewing them in the client: the chat/thread unread pointer advances to the newest of them, and senders see "Read".
+   * Main-chat messages advance the chat's read position by position; thread replies advance that thread by threadPosition,
+   * and the request's maxPosition uses the thread root message's position (required by the server, and it only moves forward, never back).
+   * Throws if a message doesn't exist, isn't in the chat, or the request fails. Returns the number of messages marked.
    */
   async readMessages(chatId: string, messageIds: string[]): Promise<number> {
     const found = ((await this.api('messages.PullMessagesByIdsRequest', { messageIds })).messages ??
@@ -1232,7 +1232,7 @@ export class LarkClient {
         chatIds.push(mid);
         chatMax = Math.max(chatMax, position);
       }
-      // 只有真正的话题回复带 threadPosition（>=0；根消息为 -1）；普通群的引用回复只有 position，在主会话里
+      // Only real thread replies carry threadPosition (>=0; -1 for the root); quote replies in regular groups only have position and live in the main chat
       const threadId = v.threadId as string | undefined;
       const threadPosition = v.threadPosition as number | undefined;
       if (threadId && threadPosition !== undefined && threadPosition >= 0) {
@@ -1267,13 +1267,13 @@ export class LarkClient {
     return messageIds.length;
   }
 
-  /** 调任意网关接口：请求类型名（如 chats.PullChatsByIdsRequest）或 cmd 数字；返回响应 dict（无响应类型时为 Packet dict）。 */
+  /** Call any gateway endpoint: request type name (e.g. chats.PullChatsByIdsRequest) or cmd number; returns the response dict (a Packet dict when there's no response type). */
   async api(typeOrCmd: string | number, data?: Dict | null): Promise<Dict> {
     const { cmd, req, resp } = resolveCmd(typeOrCmd);
     return this.post(cmd, req ? toBinary(req, fromDict(req, data)) : undefined, resp);
   }
 
-  /** 同 api，但请求按 protobuf 对象构造：字节字段直接给 Uint8Array，int64 给 bigint（富文本元素的 property 就是字节）。 */
+  /** Same as api, but the request is built as a protobuf object: byte fields take Uint8Array, int64 takes bigint (rich-text element properties are bytes). */
   private async call(typeName: string, init: Record<string, unknown>): Promise<Dict> {
     const { cmd, req, resp } = resolveCmd(typeName);
     if (!req) throw new Error(`${typeName} 不是请求类型`);
@@ -1316,8 +1316,8 @@ export class LarkClient {
   }
 
   /**
-   * 收件箱里 since（毫秒）之后有变动的会话，按变动时间从新到旧。
-   * 只含会话卡片（单聊、群聊）；话题、文档、邮件等其他卡片跳过。
+   * Chats in the inbox that changed after since (ms), newest change first.
+   * Only chat cards (direct and group chats); threads, docs, mail and other cards are skipped.
    */
   async recentChats(since: number, maxPages = 20): Promise<RecentChat[]> {
     const out: RecentChat[] = [];
@@ -1339,7 +1339,7 @@ export class LarkClient {
         const chatId = String(card.id);
         out.push({ chatId, updatedAt, chat: chats[chatId] ?? null });
       }
-      // 卡片按 rankTime（秒）从新到旧排列，翻到比 since 还旧的就不用再往后翻
+      // Cards are ordered by rankTime (seconds) newest first; once a card is older than since, stop paging
       const oldest = Number(cards.at(-1)?.rankTime ?? 0) * 1000;
       const next = resp.nextCursor as bigint | undefined;
       if (!cards.length || !next || oldest < since) break;
@@ -1348,7 +1348,7 @@ export class LarkClient {
     return out;
   }
 
-  /** 按消息 id 取消息（可跨会话），按传入顺序返回；不存在或无权查看的 id 跳过。 */
+  /** Fetch messages by id (may span chats), returned in the given order; ids that don't exist or aren't visible are skipped. */
   async getMessages(messageIds: string[]): Promise<LarkMessage[]> {
     if (!messageIds.length) return [];
     const resp = await this.api('messages.PullMessagesByIdsRequest', { messageIds });
@@ -1361,7 +1361,7 @@ export class LarkClient {
     return out;
   }
 
-  /** 一个话题的全部上下文：根消息在前，随后是最近 limit 条回复；根消息不存在时为空。 */
+  /** Full context of a thread: root message first, then the latest limit replies; empty if the root message doesn't exist. */
   async threadMessages(rootId: string, limit = 200): Promise<LarkMessage[]> {
     const [root] = await this.getMessages([rootId]);
     if (!root) return [];
@@ -1369,8 +1369,8 @@ export class LarkClient {
   }
 
   /**
-   * 一个话题里的消息（根消息之后的回复），按话题内顺序；只看最近 limit 条，话题不存在时为空。
-   * 话题内 position 从 0 起（第一条回复）；请求 -1 会返回根消息，但响应按根消息未设置的 threadPosition 记在 0 上，与第一条回复冲突，所以不请求它。
+   * Messages in a thread (replies after the root), in thread order; only the latest limit are considered; empty if the thread doesn't exist.
+   * Thread positions start at 0 (the first reply); requesting -1 returns the root, but the response files it under 0 because the root's threadPosition is unset, colliding with the first reply, so we don't request it.
    */
   async threadReplies(threadId: string, limit = 200): Promise<LarkMessage[]> {
     const info = await this.api('thread.PullThreadsByIDsRequest', { threadIds: [threadId] });
@@ -1389,9 +1389,9 @@ export class LarkClient {
   }
 
   /**
-   * since（毫秒）之后到达、但没经过长连接收到的消息：用于断线重连后补收。按创建时间升序，可能与已收到的重复（调用方按 msg_id 去重）。
-   * 只看收件箱里 since 之后有变动的会话：普通会话拉本地 position 之后的会话消息，再查本地见过的和新消息里带回复的话题；
-   * 话题群按话题位置看最近的话题，取 since 之后更新过的话题里的根消息与回复。
+   * Messages that arrived after since (ms) but weren't received over the long connection: used to backfill after a reconnect. Ascending by creation time; may overlap with already-received ones (caller dedupes by msg_id).
+   * Only chats in the inbox that changed after since are checked: regular chats pull chat messages after the local position, then query threads seen locally and threads with replies among the new messages;
+   * thread groups look at recent threads by thread position and take root messages and replies from threads updated after since.
    */
   async missedMessages(since: number, o: MissedOptions = {}): Promise<LarkMessage[]> {
     const max = o.maxPerChat ?? 200;
@@ -1466,8 +1466,8 @@ export class LarkClient {
   }
 
   /**
-   * 收件箱里有未读的会话（since 毫秒之后有变动的，默认最近 30 天），按最近变动从新到旧。
-   * 未读数同客户端角标：会话未读消息数，话题群另计未读的新话题数。
+   * Chats in the inbox with unread messages (changed after since ms, default the last 30 days), most recent change first.
+   * Unread counts match the client badge: the chat's unread message count, with thread groups counting unread new threads separately.
    */
   async unreadChats(since = Date.now() - 30 * 86_400_000): Promise<UnreadChat[]> {
     const out: UnreadChat[] = [];
@@ -1490,8 +1490,8 @@ export class LarkClient {
   }
 
   /**
-   * 一个会话里的未读消息（已读位置之后的，最多 limit 条），按时间升序。
-   * 话题群取已读话题位置之后的新话题，以及最近话题里已读位置之后的回复。
+   * Unread messages in a chat (after the read position, up to limit), ascending by time.
+   * For thread groups: new threads after the read thread position, plus replies after the read position in recent threads.
    */
   async unreadMessages(chatId: string, limit = 50): Promise<LarkMessage[]> {
     const chat = await this.getChatInfo(chatId);
@@ -1544,7 +1544,7 @@ export class LarkClient {
       .slice(-limit);
   }
 
-  /** 各会话里还没读的、@ 了我（或 @所有人）的消息，按时间升序。 */
+  /** Unread messages across chats that @mention me (or @all), ascending by time. */
   async unreadMentions(since?: number): Promise<LarkMessage[]> {
     const out: LarkMessage[] = [];
     for (const chat of await this.unreadChats(since))
@@ -1553,14 +1553,14 @@ export class LarkClient {
   }
 
   /**
-   * 按时间切分会话的 position 边界：在它之前的消息都早于 time（毫秒），从它起的都不早于 time；都更早时为最新 position + 1。
-   * 边界可能落在空洞上（该 position 没有消息），作为拉取的起点不影响结果。
-   * 在 position 上二分查找，每步拉一小段（position 可能有空洞：撤回无痕、不可见的消息），约 log2(N) 次请求。
+   * Find the chat position boundary for a time: messages before it are all earlier than time (ms), messages from it onward are not earlier; if all are earlier, it's the latest position + 1.
+   * The boundary may land on a gap (a position with no message); as a pull starting point that doesn't affect the result.
+   * Binary search over positions, pulling a small range each step (positions can have gaps: silently recalled or invisible messages), about log2(N) requests.
    */
   async positionAt(chatId: string, time: number, last?: number): Promise<number> {
     const end = last ?? int((await this.getChatInfo(chatId))?.lastMessagePosition);
     const target = Math.floor(time / 1000);
-    /** pos 起第一条存在的消息的 [position, 创建时间]；到 end 都没有时为 null。 */
+    /** [position, creation time] of the first existing message from pos onward; null if none up to end. */
     const probe = async (pos: number): Promise<[number, number] | null> => {
       for (let width = 8; pos <= end; pos += width, width *= 2) {
         const upto = Math.min(end, pos + width - 1);
@@ -1587,8 +1587,8 @@ export class LarkClient {
   }
 
   /**
-   * 时间范围内（毫秒，含两端）的会话消息（主会话流，同 pullHistory），最多取最新的 limit 条，按 position 升序。
-   * 先二分查出范围对应的 position，再按 position 拉取。
+   * Chat messages within a time range (ms, inclusive) on the main chat stream (same as pullHistory), at most the latest limit, ascending by position.
+   * First binary-searches the positions for the range, then pulls by position.
    */
   async historyRange(
     chatId: string,
@@ -1613,7 +1613,7 @@ export class LarkClient {
     return inRange;
   }
 
-  /** 按 position 拉历史消息并解码；save 时逐条入库（单条失败忽略）。 */
+  /** Pull history messages by position and decode them; with save, each is stored as it goes (individual failures ignored). */
   async pullHistory(
     chatId: string,
     positions: number[],
@@ -1636,7 +1636,7 @@ export class LarkClient {
   }
 }
 
-/** 库方法 → 权限项（与命令行同名，按最接近的命令归类）；类型要求覆盖全部公开方法，新增方法时必须归类。 */
+/** Library method -> permission key (named like the CLI commands, grouped under the closest command); the type requires every public method be covered, so new methods must be assigned. */
 type Methods<T> = {
   [K in keyof T]: T[K] extends (...args: never) => unknown ? K : never;
 }[keyof T];

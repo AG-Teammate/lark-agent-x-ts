@@ -1,11 +1,11 @@
-/** 网页客户端的 UA；网关与登录接口都按浏览器请求校验。 */
+/** Web client UA; both the gateway and the login endpoints validate requests as browser requests. */
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';
 
 /**
- * 非 2xx 响应（对应 requests 的 raise_for_status，消息格式一致）。
- * reason 是服务端给的出错原因（网关响应里的错误文本，如 `chat not in thread mode`），没有时为空串；
- * 它不进 message，以免改变与原版一致的报错文案。
+ * Non-2xx response (equivalent to requests' raise_for_status, with the same message format).
+ * reason is the failure reason given by the server (error text from the gateway response, e.g. `chat not in thread mode`), or an empty string if none;
+ * it is kept out of message so the error text stays identical to the original.
  */
 export class HttpError extends Error {
   constructor(
@@ -18,7 +18,7 @@ export class HttpError extends Error {
   }
 }
 
-/** 连接失败、超时等网络层错误；消息带"网络"，调用方据此区分凭证问题与网络问题。 */
+/** Network-layer errors such as connection failures and timeouts; the message contains "网络" ("network") so callers can tell network problems from credential problems. */
 export class NetworkError extends Error {}
 
 export const cookieHeader = (cookies: Record<string, string>): string =>
@@ -77,8 +77,8 @@ function parseSetCookie(line: string): { name: string; value: string; expired: b
 }
 
 /**
- * cookie 罐（对应 requests 的会话 cookie）：手动跟随重定向，收下每一跳的 Set-Cookie，后续请求全部带上。
- * 用于扫码登录与 messenger 页面（会 302 到租户子域名并在途中下发 cookie）；涉及的都是同一区域的子域名，不按域名区分。
+ * Cookie jar (equivalent to a requests session's cookies): follows redirects manually, collecting Set-Cookie from every hop and sending them all on later requests.
+ * Used for QR login and the messenger page (which 302-redirects to the tenant subdomain and sets cookies along the way); all hosts involved are subdomains of one region, so cookies are not scoped per domain.
  */
 export class CookieJar {
   readonly cookies: Record<string, string>;
@@ -109,7 +109,7 @@ export class CookieJar {
       const location = res.headers.get('location');
       if (res.status < 300 || res.status >= 400 || !location) return res;
       current = new URL(location, current).toString();
-      // 与浏览器一致：303 及 POST 的 301/302 改为 GET 且丢弃请求体
+      // Same as browsers: 303, and 301/302 for POST, switch to GET and drop the request body
       if (
         res.status === 303 ||
         ((res.status === 301 || res.status === 302) && opts.method === 'POST')

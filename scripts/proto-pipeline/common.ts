@@ -2,9 +2,9 @@ import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
- * 协议资产再生成管线的公共部分（迁移自 fork 版 dev/proto_pipeline，产物与原版逐字节一致）。
- * 工作目录 `LARK_WORK_DIR`（输入与中间产物，默认 scripts/proto-pipeline/work），
- * 输出目录 `LARK_PROTO_OUT`（.proto 与接口表，默认 scripts/proto-pipeline/out）。
+ * Shared parts of the protocol-asset regeneration pipeline (ported from the fork's dev/proto_pipeline; output is
+ * byte-identical to the original). Work dir `LARK_WORK_DIR` (inputs and intermediates, default
+ * scripts/proto-pipeline/work), output dir `LARK_PROTO_OUT` (.proto files and cmd table, default scripts/proto-pipeline/out).
  */
 const here = import.meta.dir;
 export const WORK_DIR = resolve(process.env.LARK_WORK_DIR || join(here, 'work'));
@@ -16,8 +16,9 @@ export const CDN_BASE =
   'https://sf1-scmcdn-cn.feishucdn.com/obj/feishu-static/ee/web-client-next/p/static/js';
 
 /**
- * 基础 worklet 包（文件名带 hash，飞书发版后会变）：1242 js runtime、1181 shared worklet（长连接）、
- * 9174 messenger worklet、9373 feed worklet。最新文件名的取法见 README。可用 `LARK_BASE_BUNDLES=1242.xxxx,1181.xxxx,...` 覆盖。
+ * Base worklet bundles (file names include a hash that changes with each Feishu release): 1242 js runtime, 1181 shared
+ * worklet (long connection), 9174 messenger worklet, 9373 feed worklet. See README for how to get the latest file names.
+ * Override with `LARK_BASE_BUNDLES=1242.xxxx,1181.xxxx,...`.
  */
 export const BASE_BUNDLES = (
   process.env.LARK_BASE_BUNDLES || '1242.60b3a8cd,1181.aa6c8a55,9174.30e252dd,9373.e0426f59'
@@ -26,7 +27,7 @@ export const BASE_BUNDLES = (
   .map((s) => s.trim())
   .filter(Boolean);
 
-/** 下载时一并保留的包（chunk id → hash）：基础包本身与 8929，即使不在 chunk 映射里，也参与第 3 步的提取。 */
+/** Bundles always downloaded (chunk id → hash): the base bundles themselves and 8929; they take part in step 3 extraction even if absent from the chunk map. */
 export const EXTRA_BUNDLES: Record<string, string> = {
   ...Object.fromEntries(BASE_BUNDLES.map((b) => b.split('.') as [string, string])),
   '8929': '4a638fa1',
@@ -37,13 +38,13 @@ export const ensureDir = (p: string): string => {
   return p;
 };
 
-/** 按 UTF-8 读文本，非法字节替换为 U+FFFD（对应 Python 的 errors='replace'）。 */
+/** Read text as UTF-8, replacing invalid bytes with U+FFFD (like Python's errors='replace'). */
 export const readText = async (path: string): Promise<string> =>
   new TextDecoder('utf-8').decode(await Bun.file(path).arrayBuffer());
 
-/** Python 的 str.splitlines()：认全部换行符，末尾的换行不产生空行。 */
+/** Python's str.splitlines(): recognizes all line separators; a trailing newline does not produce an empty line. */
 export function splitlines(s: string): string[] {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: 就是 Python splitlines 认的分隔符（\x1c-\x1e 为文件/组/记录分隔符）
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: exactly the separators Python splitlines recognizes (\x1c-\x1e are file/group/record separators)
   const parts = s.split(/\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/);
   if (parts.length && parts.at(-1) === '') parts.pop();
   return parts;

@@ -16,7 +16,7 @@ export interface AgentBackend {
 
 export const CMD_TEMPLATE = 'claude -p --dangerously-skip-permissions';
 
-/** RFC 4122 v5 UUID（对应 Python uuid.uuid5）。 */
+/** RFC 4122 v5 UUID (equivalent to Python uuid.uuid5). */
 export function uuid5(namespace: string, name: string): string {
   const ns = Buffer.from(namespace.replaceAll('-', ''), 'hex');
   const hash = createHash('sha1')
@@ -31,8 +31,8 @@ export function uuid5(namespace: string, name: string): string {
 const NAMESPACE_URL = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
 
 /**
- * 本地 Claude Code 后端：每个会话边界一个 agent 会话（session id 由会话键确定性生成），首次 `--session-id` 建立，
- * 之后 `--resume` 续上；消息经 stdin 交给 `claude -p`，agent 自己决定是否用 `lark send` 回复。
+ * Local Claude Code backend: one agent session per chat boundary (session id derived deterministically from the session key), created with `--session-id` the first time,
+ * then continued with `--resume`. The message is passed to `claude -p` via stdin, and the agent decides on its own whether to reply with `lark send`.
  */
 export class ClaudeCodeBackend implements AgentBackend {
   readonly name = 'claude';
@@ -42,7 +42,7 @@ export class ClaudeCodeBackend implements AgentBackend {
     readonly cmdTemplate = CMD_TEMPLATE,
   ) {}
 
-  /** 旧版把会话存在 agent_sessions.json，首次启动时迁移进 SQLite 并改名留档。 */
+  /** Older versions stored sessions in agent_sessions.json; on first start they are migrated into SQLite and the file is renamed and kept as a backup. */
   async migrateJsonSessions(): Promise<void> {
     const path = join(dataDir(), 'agent_sessions.json');
     if (!existsSync(path)) return;

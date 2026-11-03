@@ -1,7 +1,7 @@
 /**
- * `lark permissions edit` 的终端编辑器：分组树，逐项在 继承 / 允许 / 拒绝 之间切换，每行实时显示最终能否执行。
- * 状态与渲染（PermissionEditor）和终端读键（editInTerminal）分开，前者不依赖终端，可以直接测。
- * 用 node:readline 的按键事件实现：常见交互库只有二选一的勾选，没有三态的树。
+ * Terminal editor for `lark permissions edit`: a grouped tree where each item toggles between inherit / allow / deny, with each row showing live whether it can ultimately run.
+ * State and rendering (PermissionEditor) are separate from terminal key reading (editInTerminal); the former does not depend on a terminal and can be tested directly.
+ * Built on node:readline keypress events: common prompt libraries only offer two-state checkboxes, not a three-state tree.
  */
 import { emitKeypressEvents } from 'node:readline';
 import {
@@ -21,7 +21,7 @@ const LABEL: Record<State, string> = { inherit: '继承', allow: '允许', deny:
 const NEXT: Record<State, State> = { inherit: 'allow', allow: 'deny', deny: 'inherit' };
 const HELP = '↑↓ 移动  ←→ 折叠/展开  空格 切换  a 允许  d 拒绝  i 继承  s 保存  q 退出';
 
-/** readline 按键事件里用到的字段。 */
+/** Fields used from readline keypress events. */
 export interface Key {
   name?: string | undefined;
   ctrl?: boolean | undefined;
@@ -30,7 +30,7 @@ export interface Key {
 interface Row {
   key: string;
   group?: Group;
-  /** 分组下的权限项；分组行与 `*` 行没有。 */
+  /** Permission items under a group; group rows and the `*` row have none. */
   item?: Permission;
 }
 
@@ -43,7 +43,7 @@ const stateText = (st: State) =>
       ? paint('31', LABEL.deny)
       : paint('2', LABEL.inherit);
 
-/** 终端显示宽度：中日韩字符与全角符号占两列。 */
+/** Terminal display width: CJK characters and full-width symbols take two columns. */
 function width(s: string): number {
   let w = 0;
   for (const ch of s) {
@@ -74,9 +74,9 @@ function clip(s: string, max: number): string {
 
 export class PermissionEditor {
   cursor = 0;
-  /** 改过且还没保存。 */
+  /** Modified and not yet saved. */
   dirty = false;
-  /** 有未保存的修改时按了退出，等待确认。 */
+  /** Quit was pressed with unsaved changes; awaiting confirmation. */
   confirming = false;
   private offset = 0;
   private readonly allow: string[];
@@ -122,7 +122,7 @@ export class PermissionEditor {
     this.dirty = true;
   }
 
-  /** 树里没有的规则（如整条命令级的 `scheduled`，它的动作分属不同分组），保存时原样保留。 */
+  /** Rules not in the tree (e.g. command-level `scheduled`, whose actions belong to different groups) are preserved as-is on save. */
   extras(): string[] {
     const shown = new Set(['*', ...Object.keys(GROUPS), ...this.items]);
     return [
@@ -137,7 +137,7 @@ export class PermissionEditor {
     return match(rules, row.group ? [row.group, '*'] : ['*']);
   }
 
-  /** 处理一次按键；返回 save / quit 时编辑结束。 */
+  /** Handle one keypress; editing ends when it returns save / quit. */
   handle(key: Key): 'save' | 'quit' | undefined {
     if (key.ctrl && key.name === 'c') return 'quit';
     if (this.confirming) {
@@ -199,7 +199,7 @@ export class PermissionEditor {
     return undefined;
   }
 
-  /** 整屏内容（每项一行，含颜色）；行数不超过 height，列表放不下时随光标滚动。 */
+  /** Full-screen content (one row per item, with colors); at most `height` lines, scrolling with the cursor when the list doesn't fit. */
   render(columns: number, height: number): string[] {
     const head = [paint('1', this.title)];
     if (this.note) head.push(paint('2', this.note));
@@ -249,7 +249,7 @@ export class PermissionEditor {
               : '没有规则,默认允许'
             : ''
           : '全部命令';
-      // 前面各列：光标 2 + 名字 + 状态 4 + 箭头 4 + 结果 4 + 间隔 2
+      // Leading columns: cursor 2 + name + state 4 + arrow 4 + result 4 + gap 2
       const rest = columns - 1 - (2 + nameWidth + 4 + 4 + 4 + 2);
       const pointer = at ? paint('36', '› ') : '  ';
       return `${pointer}${at ? paint('1', name) : name}${stateText(st)}  → ${verdictText(v)}  ${paint('2', clip(note, rest))}`;
@@ -258,14 +258,14 @@ export class PermissionEditor {
   }
 }
 
-/** 在终端里运行编辑器（备用屏幕、原始按键模式）；保存时返回新规则，放弃时返回 null。 */
+/** Run the editor in the terminal (alternate screen, raw key mode); returns the new rules on save, null on discard. */
 export async function editInTerminal(editor: PermissionEditor): Promise<Rules | null> {
   const { stdin, stdout } = process;
   emitKeypressEvents(stdin);
   stdin.setRawMode(true);
   stdin.resume();
   stdout.write('\x1b[?1049h\x1b[?25l');
-  // 原始模式下 \n 不回到行首，换行要写 \r\n
+  // In raw mode \n does not return to column 0, so newlines must be written as \r\n
   const draw = () =>
     stdout.write(
       `\x1b[H\x1b[2J${editor.render(stdout.columns || 80, stdout.rows || 24).join('\r\n')}`,
