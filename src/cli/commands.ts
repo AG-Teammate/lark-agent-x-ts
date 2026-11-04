@@ -1904,11 +1904,11 @@ const mailCmd: Command = {
         case 'list': {
           const target = args[0] ?? 'INBOX';
           if (a.threads) {
-            let threads = await m.threads(await m.resolveLabel(target), {
+            const threads = await m.threads(await m.resolveLabel(target), {
               limit: Number(a.limit),
               ...(a.before ? { before: parseTimeArg(String(a.before)) } : {}),
+              unreadOnly: Boolean(a.unread),
             });
-            if (a.unread) threads = threads.filter((t) => t.unread);
             if (json) printJson(threads);
             else
               for (const t of threads) {

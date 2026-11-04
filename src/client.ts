@@ -1664,8 +1664,13 @@ export class LarkClient {
   /** Unread messages across chats that @mention me (or @all), ascending by time. */
   async unreadMentions(since?: number): Promise<LarkMessage[]> {
     const out: LarkMessage[] = [];
-    for (const chat of await this.unreadChats(since))
-      out.push(...(await this.unreadMessages(chat.chatId)).filter((m) => m.at_me));
+    const todo = await this.unreadChats(since);
+    // Each chat costs a few requests; check several at a time rather than in sequence
+    const worker = async () => {
+      for (let chat = todo.shift(); chat; chat = todo.shift())
+        out.push(...(await this.unreadMessages(chat.chatId)).filter((m) => m.at_me));
+    };
+    await Promise.all(Array.from({ length: 4 }, worker));
     return out.sort((a, b) => (a.create_time ?? 0) - (b.create_time ?? 0));
   }
 

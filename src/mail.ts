@@ -405,8 +405,7 @@ export class LarkMail {
 
   /** Labels and folders with unread and total counts: system labels first, then user labels, then folders. */
   async labels(): Promise<MailLabel[]> {
-    const resp = await this.client.api('mails.MailInitSyncRequest', { forceColdStart: true });
-    const cold = (resp.coldStart ?? {}) as Dict;
+    const cold = await this.coldStart();
     const unread = (cold.mailUnreadCount ?? {}) as Record<string, unknown>;
     const lists = (cold.labelList ?? {}) as Dict;
     const out: MailLabel[] = [];
@@ -422,6 +421,24 @@ export class LarkMail {
     for (const x of list(lists.userLabels)) add(x, 'label');
     for (const x of list(lists.userFolders)) add(x, 'folder');
     return out;
+  }
+
+  /** The initial sync's mailbox snapshot: label lists and the unread counts the client's badges show. */
+  private async coldStart(): Promise<Dict> {
+    const resp = await this.client.api('mails.MailInitSyncRequest', { forceColdStart: true });
+    return (resp.coldStart ?? {}) as Dict;
+  }
+
+  /**
+   * Unread count under a label or folder id from the initial sync, per message or per thread; undefined when the
+   * server doesn't report one for that id. Searches can't filter by read state, so this bounds unread listings.
+   */
+  private async unreadCount(id: string, per: 'message' | 'thread'): Promise<number | undefined> {
+    const cold = await this.coldStart();
+    const counts = (per === 'message' ? cold.mailMessageUnreadCount : cold.mailUnreadCount) as
+      | Record<string, unknown>
+      | undefined;
+    return counts && id in counts ? num(counts[id]) : undefined;
   }
 
   /**
@@ -457,29 +474,36 @@ export class LarkMail {
     o: { limit?: number; until?: number; unreadOnly?: boolean } = {},
   ): Promise<MailSearchHit[]> {
     const t = await this.resolveTarget(labelOrFolder);
+    let limit = o.limit ?? 20;
+    // Read state is filtered client-side, which would page through the whole label to prove there's nothing more;
+    // the server's unread count says when to stop (and that there's nothing to look for when it's zero)
+    if (o.unreadOnly) limit = Math.min(limit, (await this.unreadCount(t.id, 'message')) ?? limit);
+    if (limit <= 0) return [];
     return this.search('', {
       ...(t.folder ? { folder: t.id } : { label: t.id }),
       ...(o.until ? { until: o.until } : {}),
       ...(o.unreadOnly ? { unreadOnly: true } : {}),
-      limit: o.limit ?? 20,
+      limit,
     });
   }
 
   /**
    * Threads under a label, newest first, up to limit. before (ms) continues an earlier listing: pass the last
-   * thread's updatedAt to get the next page.
+   * thread's updatedAt to get the next page. unreadOnly keeps threads with unread mail, bounded by the server's unread
+   * thread count like list().
    */
   async threads(
     label = 'INBOX',
-    o: { limit?: number; before?: number } = {},
+    o: { limit?: number; before?: number; unreadOnly?: boolean } = {},
   ): Promise<MailThread[]> {
-    const limit = o.limit ?? 20;
+    let limit = o.limit ?? 20;
+    if (o.unreadOnly) limit = Math.min(limit, (await this.unreadCount(label, 'thread')) ?? limit);
     const out: MailThread[] = [];
     let before = o.before;
-    while (out.length < limit) {
+    for (let page = 0; out.length < limit && page < (o.unreadOnly ? 40 : 1000); page++) {
       const resp = await this.client.api('mails.GetMailThreadMetaRequest', {
         labelId: label,
-        pageSize: Math.min(50, limit - out.length),
+        pageSize: o.unreadOnly ? 50 : Math.min(50, limit - out.length),
         requestParams: {
           timestampOperator: before ? OLDER_THAN : NEWER_THAN,
           timestamp: before ?? 0,
@@ -488,21 +512,23 @@ export class LarkMail {
         useClientFg: true,
         useInboxTypeFg: true,
       });
-      const page = list(resp.threads);
-      for (const t of page) {
+      const threads = list(resp.threads);
+      for (const t of threads) {
         const metas = list(t.messages);
+        const unread = metas.some((m) => list<string>(m.labelIds).includes('UNREAD'));
+        if ((o.unreadOnly && !unread) || out.length >= limit) continue;
         out.push({
           threadId: str(t.threadBizId),
           messageIds: metas.map((m) => str(m.messageBizId)),
           latest: null,
           messageCount: metas.length,
-          unread: metas.some((m) => list<string>(m.labelIds).includes('UNREAD')),
+          unread,
           labels: [...new Set(metas.flatMap((m) => list<string>(m.labelIds).map(String)))],
           updatedAt: num(t.sortTimestamp),
         });
       }
-      if (!page.length || !resp.hasMore) break;
-      before = out.at(-1)?.updatedAt;
+      if (!threads.length || !resp.hasMore) break;
+      before = num(threads.at(-1)?.sortTimestamp);
     }
     await this.fillLatest(out);
     return out;
@@ -594,17 +620,23 @@ export class LarkMail {
         byMsg.set(str(x.messageBizId), str(((x.content ?? {}) as Dict).subject));
     }
     for (const [t, m] of firstIds) subjects.set(t, byMsg.get(m) ?? '');
-    for (const [threadId, subject] of subjects) {
-      const core = subject.replace(/^(\s*(re|fw|fwd|aw|wg)\s*:)+/i, '').trim();
-      if (!core) continue;
-      const hits = [
-        ...(await this.search(core, { limit: 100 })),
-        ...(includeTrash ? await this.search(core, { label: 'TRASH', limit: 100 }) : []),
-      ];
-      const ids = out.get(threadId) as string[];
-      for (const h of hits)
-        if (h.threadId === threadId && !ids.includes(h.messageId)) ids.push(h.messageId);
-    }
+    // One or two searches per thread; run a few threads at a time rather than all in sequence
+    const todo = [...subjects];
+    const worker = async () => {
+      for (let next = todo.shift(); next; next = todo.shift()) {
+        const [threadId, subject] = next;
+        const core = subject.replace(/^(\s*(re|fw|fwd|aw|wg)\s*:)+/i, '').trim();
+        if (!core) continue;
+        const [inbox, trash] = await Promise.all([
+          this.search(core, { limit: 100 }),
+          includeTrash ? this.search(core, { label: 'TRASH', limit: 100 }) : [],
+        ]);
+        const ids = out.get(threadId) as string[];
+        for (const h of [...inbox, ...trash])
+          if (h.threadId === threadId && !ids.includes(h.messageId)) ids.push(h.messageId);
+      }
+    };
+    await Promise.all(Array.from({ length: 4 }, worker));
     return out;
   }
 
@@ -624,8 +656,9 @@ export class LarkMail {
         fromList: o.from ?? [],
         toList: o.to ?? [],
         subjectList: o.subject ?? [],
-        startDate: o.since ? Math.floor(o.since / 1000) : 0,
-        endDate: o.until ? Math.floor(o.until / 1000) : 0,
+        // Milliseconds, unlike most Lark timestamps
+        startDate: o.since ?? 0,
+        endDate: o.until ?? 0,
         hasAttachment: Boolean(o.hasAttachment),
         label: o.label ?? '',
         ...(o.folder ? { folder: o.folder, isFolderEnabled: true } : {}),

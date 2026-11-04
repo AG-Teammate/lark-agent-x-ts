@@ -433,8 +433,9 @@ describe('mail search and listing', () => {
       keyword: 'report',
       fromList: [PEER],
       label: 'INBOX',
-      startDate: 1_790_000_000,
-      endDate: 1_790_100_000,
+      // The search takes milliseconds
+      startDate: 1_790_000_000_500,
+      endDate: 1_790_100_000_900,
       isConversationModeEnable: false,
       pageSize: 50,
       searchSession: '',
@@ -501,6 +502,7 @@ describe('mail search and listing', () => {
   const labelList: Handler = () => ({
     coldStart: {
       mailUnreadCount: { INBOX: '3', '7300000000000000001': 1 },
+      mailMessageUnreadCount: { INBOX: '1', SPAM: '0' },
       labelList: {
         systemLabels: [{ id: 'INBOX', name: 'Inbox', totalCount: '10' }],
         userLabels: [{ id: '7300000000000000001', name: 'Project team' }],
@@ -577,13 +579,65 @@ describe('mail search and listing', () => {
       label: '',
       folder: '7300000000000000002',
       isFolderEnabled: true,
-      endDate: 1_790_000_000,
+      endDate: 1_790_000_000_000,
     });
 
     calls.length = 0;
     await c.mail.list('Project team');
     expect(searches()[0]).toMatchObject({ label: '7300000000000000001' });
     expect(searches()[0]).not.toHaveProperty('folder');
+  });
+
+  test('list(): unreadOnly stops at the server unread count and skips the search when it is zero', async () => {
+    const c = newClient();
+    let page = 0;
+    const calls = fakeApi(c, {
+      'mails.MailInitSyncRequest': labelList,
+      // Endless read mail with one unread message on the first page
+      'mails.MailAdvancedSearchRequest': () => ({
+        hasMore: true,
+        msgSummary: [
+          hit(String(7000000000000000100n + BigInt(page++)), {
+            messageLabels: page === 1 ? ['INBOX', 'UNREAD'] : ['INBOX'],
+          }),
+        ],
+      }),
+    });
+    const searches = () => calls.filter(([t]) => t === 'mails.MailAdvancedSearchRequest');
+
+    const got = await c.mail.list('INBOX', { unreadOnly: true, limit: 20 });
+    expect(got).toHaveLength(1);
+    expect(searches()).toHaveLength(1);
+
+    calls.length = 0;
+    expect(await c.mail.list('SPAM', { unreadOnly: true })).toEqual([]);
+    expect(searches()).toHaveLength(0);
+  });
+
+  test('threads(): unreadOnly pages past read threads and stops at the unread thread count', async () => {
+    const c = newClient();
+    const thread = (id: string, ts: number, unread: boolean) => ({
+      threadBizId: id,
+      sortTimestamp: String(ts),
+      messages: [{ messageBizId: `${id}1`, labelIds: unread ? ['INBOX', 'UNREAD'] : ['INBOX'] }],
+    });
+    const pages = [
+      { hasMore: true, threads: [thread('71', 900, false), thread('72', 800, true)] },
+      { hasMore: true, threads: [thread('73', 700, false), thread('74', 600, true)] },
+      { hasMore: true, threads: [thread('75', 500, true)] },
+    ];
+    const calls = fakeApi(c, {
+      'mails.MailInitSyncRequest': () => ({ coldStart: { mailUnreadCount: { INBOX: '2' } } }),
+      'mails.GetMailThreadMetaRequest': () => pages.shift() as Dict,
+      'mails.GetThreadMetaByThreadIDsRequest': () => ({ metas: [] }),
+      'mails.GetMailMessageSummaryRequest': () => ({ messageSummaries: [] }),
+    });
+    const got = await c.mail.threads('INBOX', { unreadOnly: true, limit: 10 });
+    expect(got.map((t) => t.threadId)).toEqual(['72', '74']);
+    const lists = calls.filter(([t]) => t === 'mails.GetMailThreadMetaRequest').map(([, d]) => d);
+    expect(lists).toHaveLength(2);
+    // The next page continues from the last thread of the previous page, read or not
+    expect(lists[1]).toMatchObject({ requestParams: { timestamp: 800 } });
   });
 });
 
